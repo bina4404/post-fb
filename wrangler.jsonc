@@ -1,0 +1,37 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "post-fb",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  // Chỉ phục vụ qua hostname có Cloudflare Access (xem PLAN.md mục 10).
+  "workers_dev": false,
+  "preview_urls": false,
+  "observability": { "enabled": true },
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "post-fb",
+      // Thay bằng id thật từ `wrangler d1 create post-fb`.
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "post-fb-media" }],
+  "triggers": { "crons": ["* * * * *"] },
+  // Không dùng dead letter queue: cron là nơi đẩy lại việc, consumer luôn ack (PLAN.md mục 5).
+  "queues": {
+    "producers": [{ "binding": "PUBLISH_QUEUE", "queue": "post-fb-publish" }],
+    "consumers": [{ "queue": "post-fb-publish", "max_batch_size": 10 }]
+  },
+  "vars": {
+    "GRAPH_API_VERSION": "v27.0",
+    "PINTEREST_API_BASE": "https://api-sandbox.pinterest.com/v5",
+    "ACCESS_TEAM_DOMAIN": "",
+    "ACCESS_AUD": ""
+  }
+}
