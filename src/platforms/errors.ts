@@ -2,7 +2,7 @@ import { log } from "../lib/log";
 
 /** transient: thử lại được. auth: token hỏng, cần kết nối lại. permanent: sửa dữ liệu/quyền mới hết. */
 export type ErrorKind = "transient" | "permanent" | "auth";
-export type PlatformName = "facebook" | "pinterest";
+export type PlatformName = "facebook" | "pinterest" | "google";
 
 /** Lỗi khi đăng bài mà publisher biết cách xử lý (retry hoặc dừng). */
 export class PublishFailure extends Error {

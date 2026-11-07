@@ -4,11 +4,10 @@ Làm theo thứ tự. Mọi lệnh có `--remote`, `wrangler deploy` hay `wrangl
 
 ## 1. Cloudflare: tài nguyên
 
-- [ ] Kiểm tra gói Workers. App dùng D1, R2, Queues và Cron. Mỗi lần import CSV tốn khoảng 2 câu lệnh D1/dòng, nên file 200 dòng cần giới hạn 1000 câu lệnh/request của **Workers Paid**. Gói Free (50 câu lệnh) chỉ đủ khoảng 20 dòng.
+- [ ] Kiểm tra gói Workers. App dùng D1, Queues và Cron. Ảnh lưu trên Google Drive. Mỗi lần import CSV tốn khoảng 2 câu lệnh D1/dòng, nên file 200 dòng cần giới hạn 1000 câu lệnh/request của **Workers Paid**. Gói Free (50 câu lệnh) chỉ đủ khoảng 20 dòng.
 - [ ] Tạo tài nguyên:
   ```bash
   npx wrangler d1 create post-fb
-  npx wrangler r2 bucket create post-fb-media
   npx wrangler queues create post-fb-publish
   ```
 - [ ] Dán `database_id` thật vào `wrangler.jsonc` (thay `00000000-…`) rồi commit. `database_id` không phải secret.
@@ -39,6 +38,17 @@ Làm theo thứ tự. Mọi lệnh có `--remote`, `wrangler deploy` hay `wrangl
 - [ ] App mới ở mức **Trial**: Pin chỉ tạo được trên sandbox. Xin **Standard access** sớm (có thể cần video demo).
 - [ ] Khi đã có Standard access: đổi `PINTEREST_API_BASE` trong `wrangler.jsonc` thành `https://api.pinterest.com/v5`. Đang là sandbox. Nếu bước đổi code OAuth bị lỗi trên sandbox, đổi sang production base để kết nối.
 
+## 4b. Google Drive (lưu ảnh)
+
+- [ ] console.cloud.google.com → tạo project → **APIs & Services → Library** → bật **Google Drive API**.
+- [ ] **OAuth consent screen**: User type *External*, thêm scope `.../auth/drive.file`, thêm email của bạn vào *Test users*.
+- [ ] **Bắt buộc: bấm *Publish app* (chuyển sang *In production*).** Khi app còn ở *Testing*, refresh token của Google **hết hạn sau 7 ngày** và bạn sẽ phải kết nối lại mỗi tuần. `drive.file` là scope không nhạy cảm nên không cần Google xét duyệt; màn hình đồng ý có thể hiện cảnh báo "chưa xác minh", bấm tiếp tục.
+- [ ] **Credentials → Create credentials → OAuth client ID → Web application**. Authorized redirect URIs:
+  - `https://<host>/api/oauth/google/callback`
+  - `http://localhost:8787/api/oauth/google/callback` (để chạy local)
+- [ ] Ghi lại Client ID và Client secret.
+- [ ] Sau deploy: tab **Tài khoản → Kết nối Google Drive**. Chưa kết nối thì upload ảnh báo lỗi. Ảnh nằm ở thư mục gốc "My Drive" với tên `post-fb-<uuid>.png/jpg`; app chỉ thấy file do chính nó tạo.
+
 ## 5. Secrets
 
 ```bash
@@ -48,6 +58,8 @@ npx wrangler secret put FB_APP_ID
 npx wrangler secret put FB_APP_SECRET
 npx wrangler secret put PINTEREST_APP_ID
 npx wrangler secret put PINTEREST_APP_SECRET
+npx wrangler secret put GOOGLE_CLIENT_ID
+npx wrangler secret put GOOGLE_CLIENT_SECRET
 ```
 
 - [ ] **Không bao giờ** đặt `DEV_AUTH_BYPASS` trên production. Code chỉ cho bypass khi hostname là `localhost`, đây là lớp bảo vệ thứ hai.

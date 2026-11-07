@@ -1,6 +1,6 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
-import { api, count, inHours, seed } from "./helpers";
+import { api, inHours, seed } from "./helpers";
 
 type Post = { id: number; scheduledAt: number | null; targets: { status: string; nextAttemptAt: number | null }[] };
 
@@ -75,37 +75,5 @@ describe("schedule", () => {
       const local = new Date(t + 7 * 3_600_000);
       expect([local.getUTCDay(), local.getUTCHours(), local.getUTCMinutes()]).toEqual([1, 9, 0]);
     }
-  });
-});
-
-describe("media", () => {
-  it("stores a PNG in R2 and serves it back", async () => {
-    const form = new FormData();
-    form.set("file", new File([new Uint8Array([137, 80, 78, 71])], "a.png", { type: "image/png" }));
-    const res = await api("/media", { method: "POST", body: form });
-    expect(res.status).toBe(201);
-    const { key } = (await res.json()) as { key: string };
-    const get = await api(`/media/${key}`);
-    expect(get.headers.get("content-type")).toBe("image/png");
-    expect(new Uint8Array(await get.arrayBuffer())).toEqual(new Uint8Array([137, 80, 78, 71]));
-  });
-
-  it("rejects non-image files and oversized PNGs", async () => {
-    const gif = new FormData();
-    gif.set("file", new File(["x"], "a.gif", { type: "image/gif" }));
-    expect((await api("/media", { method: "POST", body: gif })).status).toBe(400);
-    const big = new FormData();
-    big.set("file", new File([new Uint8Array(1024 * 1024 + 1)], "a.png", { type: "image/png" }));
-    expect((await api("/media", { method: "POST", body: big })).status).toBe(400);
-  });
-
-  it("deletes the image when the post is deleted", async () => {
-    const form = new FormData();
-    form.set("file", new File(["x"], "a.jpg", { type: "image/jpeg" }));
-    const { key } = (await (await api("/media", { method: "POST", body: form })).json()) as { key: string };
-    const post = await createPost({ imageKey: key });
-    expect((await api(`/posts/${post.id}`, { method: "DELETE" })).status).toBe(204);
-    expect(await env.MEDIA.get(key)).toBeNull();
-    expect(await count("post_targets")).toBe(0);
   });
 });

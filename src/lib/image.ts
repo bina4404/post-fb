@@ -1,5 +1,8 @@
+import { getDb } from "../db/client";
 import type { WorkerEnv } from "../env";
-import { PublishFailure, TIMEOUT_MS } from "../platforms/errors";
+import { downloadFile } from "../platforms/drive";
+import { PlatformError, PublishFailure, TIMEOUT_MS } from "../platforms/errors";
+import { driveAccessToken } from "./accounts";
 import { log } from "./log";
 
 export type Image = { bytes: Uint8Array; contentType: string };
@@ -28,12 +31,19 @@ async function fromUrl(url: string): Promise<Image> {
   return { bytes, contentType };
 }
 
-/** Ảnh của bài: từ R2 (upload) hoặc tải từ image_url (CSV). Không có ảnh thì trả null. */
-export async function loadImage(env: WorkerEnv, post: { imageKey: string | null; imageUrl: string | null }): Promise<Image | null> {
-  if (post.imageKey) {
-    const object = await env.MEDIA.get(post.imageKey);
-    if (!object) throw new PublishFailure("permanent", "ảnh trong R2 không còn");
-    return { bytes: new Uint8Array(await object.arrayBuffer()), contentType: object.httpMetadata?.contentType ?? "image/jpeg" };
+async function fromDrive(env: WorkerEnv, fileId: string): Promise<Image> {
+  try {
+    return await downloadFile(await driveAccessToken(getDb(env), env, Date.now()), fileId);
+  } catch (err) {
+    // Lỗi token Google không phải lỗi token của Facebook/Pinterest: không được đánh dấu account đích cần kết nối lại.
+    if (err instanceof PlatformError && err.kind === "auth") throw new PublishFailure("permanent", "Google Drive cần kết nối lại");
+    if (err instanceof PlatformError && err.status === 404) throw new PublishFailure("permanent", "ảnh trên Google Drive không còn");
+    throw err;
   }
+}
+
+/** Ảnh của bài: từ Google Drive (upload) hoặc tải từ image_url (CSV). Không có ảnh thì trả null. */
+export async function loadImage(env: WorkerEnv, post: { imageKey: string | null; imageUrl: string | null }): Promise<Image | null> {
+  if (post.imageKey) return fromDrive(env, post.imageKey);
   return post.imageUrl ? fromUrl(post.imageUrl) : null;
 }

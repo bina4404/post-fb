@@ -4,5 +4,7 @@ FB_APP_ID=
 FB_APP_SECRET=
 PINTEREST_APP_ID=
 PINTEREST_APP_SECRET=
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
 # Chỉ dùng local: bỏ qua kiểm JWT Access khi hostname là localhost. Không bao giờ đặt trên production.
 DEV_AUTH_BYPASS=

@@ -1,5 +1,6 @@
 import { env } from "cloudflare:test";
 import { app } from "../src/app";
+import { encryptToken } from "../src/lib/crypto";
 
 const bypassEnv = { ...env, DEV_AUTH_BYPASS: "1" } as typeof env;
 
@@ -37,3 +38,15 @@ export async function count(table: string) {
 }
 
 export const inHours = (h: number) => new Date(Date.now() + h * 3_600_000).toISOString();
+
+export const DRIVE = "https://www.googleapis.com/drive/v3";
+export const DRIVE_UPLOAD = "https://www.googleapis.com/upload/drive/v3/files";
+
+/** Tài khoản Google Drive đã kết nối, access token còn hạn `expiresInMs`. */
+export async function seedDrive(expiresInMs = 3_600_000) {
+  await env.DB.prepare(
+    "INSERT INTO accounts (id, platform, external_id, name, access_token_enc, refresh_token_enc, access_expires_at, enabled, updated_at) VALUES (3, 'google', 'me@gmail.com', 'me@gmail.com', ?, ?, ?, 1, ?)",
+  )
+    .bind(await encryptToken("ya29.ACCESS", env.TOKEN_ENC_KEY), await encryptToken("1//REFRESH", env.TOKEN_ENC_KEY), Date.now() + expiresInMs, Date.now())
+    .run();
+}

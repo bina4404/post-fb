@@ -2,13 +2,15 @@ import { index, integer, sqliteTable, text, unique } from "drizzle-orm/sqlite-co
 
 // Mọi thời gian là epoch milliseconds UTC.
 const platform = () => text("platform", { enum: ["facebook", "pinterest"] }).notNull();
+// Tài khoản/OAuth còn có Google Drive (nơi lưu ảnh). Enum chỉ ở TypeScript, SQLite không có CHECK nên không cần migration.
+const accountPlatform = () => text("platform", { enum: ["facebook", "pinterest", "google"] }).notNull();
 
 // Không bao giờ xoá dòng: post_targets trỏ tới đây. Ngắt kết nối = xoá token + enabled=false.
 export const accounts = sqliteTable(
   "accounts",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
-    platform: platform(),
+    platform: accountPlatform(),
     externalId: text("external_id").notNull(),
     name: text("name").notNull(),
     accessTokenEnc: text("access_token_enc"),
@@ -87,6 +89,6 @@ export const scheduleSlots = sqliteTable(
 
 export const oauthStates = sqliteTable("oauth_states", {
   state: text("state").primaryKey(),
-  platform: platform(),
+  platform: accountPlatform(),
   createdAt: integer("created_at").notNull(),
 });

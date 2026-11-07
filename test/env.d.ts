@@ -10,6 +10,8 @@ declare global {
       FB_APP_SECRET: string;
       PINTEREST_APP_ID: string;
       PINTEREST_APP_SECRET: string;
+      GOOGLE_CLIENT_ID: string;
+      GOOGLE_CLIENT_SECRET: string;
     }
   }
 }

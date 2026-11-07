@@ -7,11 +7,14 @@ import type { AppEnv } from "../env";
 import { fail, idParam, readJson } from "../lib/http";
 import { contentError, insertPost, loadDestinations, targetRows, type TargetInput } from "../lib/posts";
 import { parseScheduleTime } from "../lib/time";
+import { deleteFile, driveFileId } from "../platforms/drive";
+import { driveAccessToken } from "../lib/accounts";
+import { log } from "../lib/log";
 
 const postBody = z.object({
   caption: z.string().trim().min(1),
   link: z.url({ protocol: /^https?$/ }).nullish(),
-  imageKey: z.uuid().nullish(),
+  imageKey: driveFileId.nullish(),
   imageUrl: z.url({ protocol: /^https$/ }).nullish(),
   facebookAccountId: z.int().positive().nullish(),
   pinterestBoardId: z.int().positive().nullish(),
@@ -63,6 +66,15 @@ function assertEditable(post: Awaited<ReturnType<typeof loadPost>>) {
   }
 }
 
+/** Xoá ảnh trên Drive sau khi bài đã đổi/xoá. Lỗi chỉ ghi log: bài đã được lưu, ảnh thừa không làm mất dữ liệu. */
+async function deleteImage(env: AppEnv["Bindings"], db: Db, fileId: string) {
+  try {
+    await deleteFile(await driveAccessToken(db, env, Date.now()), fileId);
+  } catch (err) {
+    log("warn", "drive_delete_failed", { fileId, message: (err as Error).message });
+  }
+}
+
 export const postRoutes = new Hono<AppEnv>();
 
 postRoutes.get("/", async (c) => {
@@ -98,7 +110,7 @@ postRoutes.patch("/:id", async (c) => {
     db.delete(postTargets).where(eq(postTargets.postId, id)),
     db.insert(postTargets).values(targetRows(id, input.targets, post.scheduledAt, now)),
   ]);
-  if (post.imageKey && post.imageKey !== imageKey) await c.env.MEDIA.delete(post.imageKey);
+  if (post.imageKey && post.imageKey !== imageKey) await deleteImage(c.env, db, post.imageKey);
   return c.json(await loadPost(db, id));
 });
 
@@ -107,6 +119,6 @@ postRoutes.delete("/:id", async (c) => {
   const post = await loadPost(db, idParam(c));
   assertEditable(post);
   await db.delete(posts).where(eq(posts.id, post.id));
-  if (post.imageKey) await c.env.MEDIA.delete(post.imageKey);
+  if (post.imageKey) await deleteImage(c.env, db, post.imageKey);
   return c.body(null, 204);
 });

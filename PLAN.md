@@ -1,6 +1,8 @@
 # PLAN — post-fb
 
-Web app đăng bài theo lịch lên Facebook Page và Pinterest Board. Một Worker duy nhất (Hono API + React SPA qua Static Assets), D1 + R2 + Cron + Queues, đăng nhập bằng Cloudflare Access.
+Web app đăng bài theo lịch lên Facebook Page và Pinterest Board. Một Worker duy nhất (Hono API + React SPA qua Static Assets), D1 + Google Drive (ảnh) + Cron + Queues, đăng nhập bằng Cloudflare Access.
+
+> **Thay đổi sau Giai đoạn 6 (bạn yêu cầu):** ảnh upload lưu trên **Google Drive** của tài khoản Gmail cá nhân (OAuth, scope `drive.file`) thay cho R2. Hosting giữ nguyên một Worker. Cột `image_key` giờ chứa id file Drive, nên D1 không đổi schema.
 
 ## 0. Đối chiếu tài liệu chính thức (07/11/2026)
 
@@ -30,12 +32,12 @@ flowchart LR
     QC[queue consumer: publisher]
   end
   API --> D1[(D1)]
-  API --> R2[(R2: ảnh)]
+  API --> GD[platforms/drive.ts] --> DRV[(Google Drive: ảnh)]
   CRON -->|refresh token Pinterest| PIN
   CRON -->|chọn target đến hạn| Q[[Queue publish]]
   Q --> QC
   QC --> D1
-  QC --> R2
+  QC --> GD
   QC --> FBA[platforms/facebook.ts] --> FB[Graph API v27.0]
   QC --> PIA[platforms/pinterest.ts] --> PIN[Pinterest API v5]
 ```
@@ -72,7 +74,7 @@ boards              // board Pinterest
 posts
   id integer pk
   caption text, link text null
-  image_key text null             // object trong R2
+  image_key text null             // id file trên Google Drive
   image_url text null             // từ CSV, tải khi đăng
   scheduled_at integer null       // null = draft
   created_at integer, updated_at integer
@@ -111,11 +113,11 @@ oauth_states        // chống CSRF, sống 10 phút
 | GET | `/api/me` | email từ JWT Access |
 | GET | `/api/targets?platform&status&from&to` | mỗi dòng là một target kèm bài của nó (cho list và calendar tuần). Lọc trên `post_targets` |
 | POST | `/api/posts` | tạo bài + targets |
-| GET/PATCH/DELETE | `/api/posts/:id` | sửa và xoá bị chặn khi có target đang `publishing`/`published`. Xoá bài thì xoá cả ảnh R2 |
+| GET/PATCH/DELETE | `/api/posts/:id` | sửa và xoá bị chặn khi có target đang `publishing`/`published`. Xoá bài thì xoá cả ảnh trên Drive (lỗi xoá chỉ ghi log) |
 | POST | `/api/posts/:id/schedule` | `{scheduled_at}` (ISO có offset) hoặc `{queue:true}` để lấy slot trống kế tiếp |
 | POST | `/api/posts/:id/unschedule` | về draft |
 | POST | `/api/targets/:id/retry` | "Đăng lại": chỉ khi `failed` và `external_post_id` null. Đặt `attempts=0`, `next_attempt_at=now` |
-| POST | `/api/media` | upload multipart lên R2, trả về `key` |
+| POST | `/api/media` | upload lên Google Drive (multipart/related), trả về `key` = id file |
 | GET | `/api/media/:key` | xem trước ảnh. `key` là UUID do server sinh, validate bằng Zod |
 | POST | `/api/import` | body CSV. 200 `{imported:n}` hoặc 422 `{errors:[{line,message}]}` |
 | GET/POST/DELETE | `/api/slots`, `/api/slots/:id` | khung giờ lặp lại |
@@ -141,6 +143,11 @@ OAuth callback đi qua trình duyệt của người dùng, trình duyệt đó 
 2. `callback`: kiểm `state` → `POST /v5/oauth/token` (Basic auth, `grant_type=authorization_code`, `code`, `redirect_uri`) → access, refresh, `expires_in`, `refresh_token_expires_in`
 3. `GET /v5/user_account` → upsert account. `GET /v5/boards` (có phân trang `bookmark`) → upsert boards (`enabled=0`)
 4. **Refresh**: **chỉ cron** chọn account Pinterest có `access_expires_at < now + 3 ngày` → `grant_type=refresh_token` → ghi đè access + refresh + 2 mốc hết hạn. Lỗi 401 → `needs_reauth`. Publisher không bao giờ refresh. Vì mỗi lần refresh sinh refresh token mới, hai nơi refresh cùng lúc sẽ làm một bên nhận 401. Khoảng đệm 3 ngày là đủ.
+
+**Google Drive (lưu ảnh)**
+1. `start` → `https://accounts.google.com/o/oauth2/v2/auth?…&scope=https://www.googleapis.com/auth/drive.file&access_type=offline&prompt=consent`
+2. `callback`: kiểm `state` → `POST https://oauth2.googleapis.com/token` → access token (1 giờ) + refresh token → `GET /drive/v3/about` lấy email → lưu account `platform='google'` (token mã hoá).
+3. Access token được refresh **ngay lúc cần** (còn < 1 phút), không qua cron: Google không xoay vòng refresh token nên refresh song song vẫn an toàn. Refresh bị từ chối (`invalid_grant`) → account Google `needs_reauth`; bài cần ảnh Drive thì `failed` "Google Drive cần kết nối lại", **không** đánh dấu account Facebook/Pinterest.
 
 **Mã hoá**: `TOKEN_ENC_KEY` là 32 byte base64 → `crypto.subtle.importKey('raw', …, 'AES-GCM')`. Mỗi lần mã hoá dùng IV 12 byte ngẫu nhiên, lưu `base64(iv||ct)`.
 
@@ -289,7 +296,7 @@ Không dùng router (SPA chỉ có vài tab, dùng hash `#/...`), không dùng t
 ## 10. Việc bạn phải làm thủ công
 
 **Cloudflare**
-1. `wrangler d1 create post-fb`, `wrangler r2 bucket create post-fb-media`, `wrangler queues create post-fb-publish`, rồi gửi tôi `database_id`. Tôi sẽ không tự chạy các lệnh này.
+1. `wrangler d1 create post-fb`, `wrangler queues create post-fb-publish`, rồi gửi tôi `database_id`. Tôi sẽ không tự chạy các lệnh này.
 2. Chọn hostname: (a) custom domain trên zone của bạn (khuyến nghị), hoặc (b) `*.workers.dev` dùng tính năng bật Access một chạm cho Workers. Nếu chọn (b) thì phải đổi `workers_dev: true`.
 3. Zero Trust → Access → Applications → Self-hosted, hostname ở bước 2, policy Allow theo email của bạn (≤5 người). Ghi lại **AUD tag** và **team domain** (`<team>.cloudflareaccess.com`).
 4. `wrangler secret put` từng secret ở mục 7. Tạo `TOKEN_ENC_KEY` bằng `openssl rand -base64 32`.

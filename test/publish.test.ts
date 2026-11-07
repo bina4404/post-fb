@@ -4,7 +4,7 @@ import { runCron, STUCK_AFTER_MS } from "../src/jobs/cron";
 import { handleQueue, publishTarget } from "../src/jobs/publish";
 import { encryptToken } from "../src/lib/crypto";
 import { mockFetch } from "./fetch-mock";
-import { api, seed } from "./helpers";
+import { api, DRIVE, seed, seedDrive } from "./helpers";
 
 const GRAPH = "https://graph.facebook.com/v27.0";
 const PIN = "https://api.pinterest.test/v5";
@@ -41,17 +41,31 @@ beforeEach(async () => {
 afterEach(() => vi.restoreAllMocks());
 
 describe("success", () => {
-  it("posts a photo from R2 to the Page and stores post_id", async () => {
-    await env.MEDIA.put("11111111-1111-4111-8111-111111111111", PNG, { httpMetadata: { contentType: "image/png" } });
-    const [id] = await duePost({ facebookAccountId: 1, link: "https://shop.test", imageKey: "11111111-1111-4111-8111-111111111111" });
-    const calls = mockFetch({ [`POST ${GRAPH}/page1/photos`]: () => Response.json({ id: "photo1", post_id: "page1_post1" }) });
+  it("posts a photo from Google Drive to the Page and stores post_id", async () => {
+    await seedDrive();
+    const [id] = await duePost({ facebookAccountId: 1, link: "https://shop.test", imageKey: "drive-file-123" });
+    const calls = mockFetch({
+      [`GET ${DRIVE}/files/drive-file-123`]: () => new Response(PNG, { headers: { "content-type": "image/png" } }),
+      [`POST ${GRAPH}/page1/photos`]: () => Response.json({ id: "photo1", post_id: "page1_post1" }),
+    });
 
     expect(await publishTarget(env, id!)).toBe("published");
-    const form = await calls[0]!.formData();
+    expect(calls[0]!.headers.get("authorization")).toBe("Bearer ya29.ACCESS");
+    const form = await calls[1]!.formData();
     expect(form.get("caption")).toBe("Hello\n\nhttps://shop.test");
     expect(form.get("access_token")).toBe("PAGE-TOKEN");
     expect(new Uint8Array(await (form.get("source") as File).arrayBuffer())).toEqual(PNG);
     expect(await target(id!)).toMatchObject({ status: "published", external_post_id: "page1_post1", attempts: 1, locked_at: null });
+  });
+
+  it("a Google Drive auth error fails the post without flagging the Facebook account", async () => {
+    await seedDrive(0); // access token hết hạn, refresh bị Google từ chối
+    const [id] = await duePost({ facebookAccountId: 1, imageKey: "drive-file-123" });
+    mockFetch({ "POST https://oauth2.googleapis.com/token": () => Response.json({ error: "invalid_grant", error_description: "Token has been expired or revoked." }, { status: 400 }) });
+    expect(await publishTarget(env, id!)).toBe("failed");
+    expect(await target(id!)).toMatchObject({ status: "failed", last_error: "Google Drive cần kết nối lại" });
+    expect(await accountStatus(1)).toBe("ok");
+    expect(await accountStatus(3)).toBe("needs_reauth");
   });
 
   it("posts a link without image to /feed", async () => {

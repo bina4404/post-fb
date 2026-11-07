@@ -19,7 +19,7 @@ export type Post = {
   createdAt: number;
   targets: Target[];
 };
-export type Account = { id: number; platform: "facebook" | "pinterest"; name: string; enabled: boolean; status: string };
+export type Account = { id: number; platform: "facebook" | "pinterest" | "google"; name: string; enabled: boolean; status: string };
 export type Board = { id: number; accountId: number; name: string; enabled: boolean };
 export type Destinations = { accounts: Account[]; boards: Board[] };
 export type Slot = { id: number; weekday: number; minuteOfDay: number };

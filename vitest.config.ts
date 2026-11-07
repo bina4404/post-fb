@@ -18,6 +18,8 @@ export default defineConfig(async () => {
             FB_APP_SECRET: "fb-secret",
             PINTEREST_APP_ID: "pin-app",
             PINTEREST_APP_SECRET: "pin-secret",
+            GOOGLE_CLIENT_ID: "g-client",
+            GOOGLE_CLIENT_SECRET: "g-secret",
             PINTEREST_API_BASE: "https://api.pinterest.test/v5",
           },
         },

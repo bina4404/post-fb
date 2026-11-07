@@ -57,7 +57,7 @@ export function PostForm({ post, dest, onSaved, onCancel }: Props) {
       <Field label="Link">
         <input className={inputClass} type="url" value={link} onChange={(e) => setLink(e.target.value)} />
       </Field>
-      <Field label={post?.imageKey && !file ? "Ảnh (đang có ảnh đã tải lên, chọn file để thay)" : "Ảnh (JPEG ≤4MB, PNG ≤1MB)"}>
+      <Field label={post?.imageKey && !file ? "Ảnh (đang có ảnh đã tải lên, chọn file để thay)" : "Ảnh (JPEG ≤4MB, PNG ≤1MB, lưu vào Google Drive)"}>
         <input type="file" accept="image/jpeg,image/png" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
       </Field>
       <Field label="…hoặc URL ảnh (https)">
