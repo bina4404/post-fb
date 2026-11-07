@@ -3,8 +3,8 @@
 	"name": "post-fb",
 	"main": "src/index.ts",
 	"compatibility_date": "2026-11-01",
-	// Chỉ phục vụ qua hostname có Cloudflare Access (xem PLAN.md mục 10).
-	"workers_dev": false,
+	// App chạy trên post-fb.bina4404.workers.dev, được Cloudflare Access bảo vệ (PLAN.md mục 10).
+	"workers_dev": true,
 	"preview_urls": false,
 	"observability": {
 		"enabled": true
@@ -20,15 +20,8 @@
 		{
 			"binding": "DB",
 			"database_name": "post-fb",
-			// Thay bằng id thật từ `wrangler d1 create post-fb`.
 			"database_id": "f959d5f7-0eb1-41d6-9ba0-0389d93ecf56",
 			"migrations_dir": "migrations"
-		},
-		{
-			"binding": "post_fb",
-			"database_name": "post-fb",
-			"database_id": "f959d5f7-0eb1-41d6-9ba0-0389d93ecf56",
-			"remote": true
 		}
 	],
 	"triggers": {
@@ -54,7 +47,7 @@
 	"vars": {
 		"GRAPH_API_VERSION": "v27.0",
 		"PINTEREST_API_BASE": "https://api-sandbox.pinterest.com/v5",
-		"ACCESS_TEAM_DOMAIN": "",
-		"ACCESS_AUD": ""
+		"ACCESS_TEAM_DOMAIN": "bina4404.cloudflareaccess.com",
+		"ACCESS_AUD": "58da1241a30d5493391328a7d8b800ae0fe13c896106da3f0ca2055825990c79"
 	}
 }

@@ -49,7 +49,7 @@ describe("Cloudflare Access middleware", () => {
   it("rejects everything when Access is not configured", async () => {
     const res = await me(
       { "Cf-Access-Jwt-Assertion": await sign(env.ACCESS_AUD) },
-      { ...env, ACCESS_AUD: "" },
+      { ...env, ACCESS_AUD: "" } as unknown as typeof env, // wrangler types gõ vars thành literal từ wrangler.jsonc
     );
     expect(res.status).toBe(403);
   });
