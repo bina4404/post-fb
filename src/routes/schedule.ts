@@ -18,7 +18,7 @@ const scheduleBody = z.union([
 ]);
 
 /** Giành slot trống đầu tiên bằng một câu UPDATE nguyên tử, để hai yêu cầu song song không lấy chung slot. */
-async function claimNextSlot(db: Db, postId: number, now: number, tz?: TimeZone): Promise<number> {
+export async function claimNextSlot(db: Db, postId: number, now: number, tz?: TimeZone): Promise<number> {
   const slots = await db.select().from(scheduleSlots);
   for (const t of upcomingSlotTimes(slots, now, 28, tz)) {
     const result = await db.run(

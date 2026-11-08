@@ -4,7 +4,7 @@ import { Accounts } from "./components/Accounts";
 import { Dashboard } from "./components/Dashboard";
 import { ImportCsv } from "./components/ImportCsv";
 import { PostForm } from "./components/PostForm";
-import { PostList } from "./components/PostList";
+import { Library } from "./components/Library";
 import { Slots } from "./components/Slots";
 import { Button, ErrorText, inputClass } from "./components/ui";
 import { loadTz, saveTz, TIME_ZONES, TzContext, type TimeZone } from "./time";
@@ -29,7 +29,7 @@ function useHashTab(): Tab {
 export function App() {
   const tab = useHashTab();
   const [email, setEmail] = useState("");
-  const [posts, setPosts] = useState<Post[]>([]);
+  const [libraryKey, setLibraryKey] = useState(0);
   const [dest, setDest] = useState<Destinations>({ accounts: [] });
   const [editing, setEditing] = useState<Post | "new" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -37,9 +37,8 @@ export function App() {
   const changeTz = (value: TimeZone) => (setTz(value), saveTz(value));
 
   const reload = useCallback(() => {
-    Promise.all([api<Post[]>("/posts"), api<Destinations>("/accounts")])
-      .then(([p, d]) => (setPosts(p), setDest(d)))
-      .catch((e: Error) => setError(e.message));
+    setLibraryKey((n) => n + 1);
+    api<Destinations>("/accounts").then(setDest, (e: Error) => setError(e.message));
   }, []);
 
   useEffect(() => {
@@ -81,7 +80,7 @@ export function App() {
           ) : (
             <Button variant="primary" onClick={() => setEditing("new")}>+ Tạo bài mới</Button>
           )}
-          <PostList posts={posts} dest={dest} onEdit={setEditing} onChanged={reload} />
+          <Library dest={dest} reloadKey={libraryKey} onEdit={setEditing} onChanged={() => api<Destinations>("/accounts").then(setDest, () => undefined)} />
         </section>
       )}
       {tab === "dashboard" && <Dashboard />}

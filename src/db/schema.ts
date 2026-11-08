@@ -75,7 +75,12 @@ export const postTargets = sqliteTable(
     needsAttention: integer("needs_attention", { mode: "boolean" }).notNull().default(false),
     updatedAt: integer("updated_at").notNull(),
   },
-  (t) => [index("post_targets_due_idx").on(t.status, t.nextAttemptAt)],
+  (t) => [
+    index("post_targets_due_idx").on(t.status, t.nextAttemptAt),
+    // Thư viện lọc/đếm theo bài, giãn cách đọc theo Page: tránh quét cả bảng khi có hàng nghìn target.
+    index("post_targets_post_idx").on(t.postId, t.status),
+    index("post_targets_account_idx").on(t.accountId, t.status, t.updatedAt),
+  ],
 );
 
 // Khung giờ lặp lại theo giờ Asia/Bangkok.

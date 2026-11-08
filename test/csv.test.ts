@@ -81,7 +81,7 @@ describe("POST /api/import", () => {
     expect(await res.json()).toEqual({ imported: 10 });
     expect(await count("posts")).toBe(10);
     expect(await count("post_targets")).toBe(10);
-    const list = (await (await api("/posts")).json()) as { targets: { status: string; idempotencyKey: string; postId: number }[] }[];
+    const list = ((await (await api("/posts")).json()) as { items: { targets: { status: string; idempotencyKey: string; postId: number }[] }[] }).items;
     for (const post of list) {
       expect(post.targets.map((t) => t.status)).toEqual(["scheduled"]);
       expect(post.targets[0]!.idempotencyKey).toBe(`${post.targets[0]!.postId}:facebook:1`);

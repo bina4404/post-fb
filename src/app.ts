@@ -5,6 +5,7 @@ import { log } from "./lib/log";
 import { requireAccess } from "./middleware/access";
 import { sameOriginWrites } from "./middleware/same-origin";
 import { accountRoutes } from "./routes/accounts";
+import { bulkRoutes } from "./routes/bulk";
 import { importRoutes } from "./routes/import";
 import { mediaRoutes } from "./routes/media";
 import { oauthRoutes } from "./routes/oauth";
@@ -19,6 +20,7 @@ app.use("*", sameOriginWrites);
 app.use("*", requireAccess);
 
 app.get("/me", (c) => c.json({ email: c.get("email") }));
+app.route("/posts", bulkRoutes);
 app.route("/posts", postRoutes);
 app.route("/posts", scheduleRoutes);
 app.route("/media", mediaRoutes);

@@ -3,13 +3,21 @@ import { api, type Destinations, type Post } from "../api";
 import { formatTime, localInputToIso, useTz } from "../time";
 import { Button, ErrorText, inputClass, StatusBadge } from "./ui";
 
-type Props = { posts: Post[]; dest: Destinations; onEdit: (p: Post) => void; onChanged: () => void };
+type RowProps = {
+  post: Post;
+  dest: Destinations;
+  onEdit: (p: Post) => void;
+  onChanged: () => void;
+  selected: boolean;
+  onSelect: (on: boolean) => void;
+};
 
 function targetLabel(t: Post["targets"][number], dest: Destinations) {
   return `Facebook · ${dest.accounts.find((a) => a.id === t.accountId)?.name ?? t.accountId}`;
 }
 
-function PostRow({ post, dest, onEdit, onChanged }: { post: Post } & Omit<Props, "posts">) {
+/** Một bài trong Thư viện: ô chọn (thao tác hàng loạt), ảnh nhỏ, caption, trạng thái từng Page, các nút. */
+export function PostRow({ post, dest, onEdit, onChanged, selected, onSelect }: RowProps) {
   const [when, setWhen] = useState("");
   const tz = useTz();
   const [error, setError] = useState<string | null>(null);
@@ -28,8 +36,9 @@ function PostRow({ post, dest, onEdit, onChanged }: { post: Post } & Omit<Props,
   }
 
   return (
-    <li className="space-y-2 rounded border bg-white p-3">
+    <div className={`space-y-2 rounded border bg-white p-3 ${selected ? "border-blue-500 ring-1 ring-blue-500" : ""}`}>
       <div className="flex gap-3">
+        <input type="checkbox" className="mt-1 h-4 w-4" checked={selected} onChange={(e) => onSelect(e.target.checked)} aria-label="Chọn bài" />
         {post.imageKey && <img src={`/api/media/${post.imageKey}?thumb=1`} alt="" loading="lazy" className="h-16 w-16 rounded object-cover" />}
         <div className="min-w-0 flex-1">
           <p className="line-clamp-2 whitespace-pre-line text-sm">{post.caption}</p>
@@ -63,15 +72,6 @@ function PostRow({ post, dest, onEdit, onChanged }: { post: Post } & Omit<Props,
         )}
       </div>
       <ErrorText error={error} />
-    </li>
-  );
-}
-
-export function PostList(props: Props) {
-  if (props.posts.length === 0) return <p className="text-sm text-gray-500">Chưa có bài nào.</p>;
-  return (
-    <ul className="space-y-3">
-      {props.posts.map((p) => <PostRow key={p.id} post={p} {...props} />)}
-    </ul>
+    </div>
   );
 }

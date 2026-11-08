@@ -1,10 +1,11 @@
-import { desc, eq, inArray, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import { getDb, type Db } from "../db/client";
 import { posts, postTargets } from "../db/schema";
 import type { AppEnv } from "../env";
 import { fail, idParam, readJson } from "../lib/http";
+import { listLibrary, POST_GROUPS } from "../lib/library";
 import { contentError, insertPost, loadDestinations, targetRows, type TargetInput } from "../lib/posts";
 import { parseScheduleTime } from "../lib/time";
 import { UNKNOWN_OUTCOME_ERROR } from "../jobs/cron";
@@ -67,13 +68,19 @@ function assertNoUnknownOutcome(post: Awaited<ReturnType<typeof loadPost>>) {
 
 export const postRoutes = new Hono<AppEnv>();
 
+const libraryQuery = z.object({
+  group: z.enum(POST_GROUPS).optional(),
+  page: z.coerce.number().int().positive().optional(),
+  q: z.string().trim().max(200).optional(),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
+/** Thư viện: lọc theo nhóm trạng thái, Page, từ khoá; kèm số bài mỗi nhóm; 50 bài mỗi trang. */
 postRoutes.get("/", async (c) => {
-  const db = getDb(c.env);
-  // shortcut: 200 bài mới nhất, không phân trang; thêm phân trang khi thư viện lớn hơn.
-  const list = await db.select().from(posts).orderBy(desc(sql`coalesce(${posts.scheduledAt}, ${posts.createdAt})`)).limit(200);
-  const ids = list.map((p) => p.id);
-  const targets = ids.length ? await db.select().from(postTargets).where(inArray(postTargets.postId, ids)) : [];
-  return c.json(list.map((p) => ({ ...p, targets: targets.filter((t) => t.postId === p.id) })));
+  const q = libraryQuery.safeParse(c.req.query());
+  if (!q.success) throw fail(400, z.prettifyError(q.error));
+  const { group, page, q: text, offset } = q.data;
+  return c.json(await listLibrary(getDb(c.env), { group, pageId: page, q: text || undefined, offset }));
 });
 
 postRoutes.post("/", async (c) => {

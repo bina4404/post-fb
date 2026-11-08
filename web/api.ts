@@ -57,3 +57,11 @@ export type TargetRow = {
   destination: string;
   accountStatus: string;
 };
+
+export type PostGroup = "draft" | "scheduled" | "failed" | "published";
+export type LibraryPage = {
+  items: Post[];
+  counts: Record<PostGroup | "all", number>;
+  total: number;
+  pageSize: number;
+};
