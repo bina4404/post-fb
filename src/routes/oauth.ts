@@ -3,14 +3,13 @@ import { Hono, type Context } from "hono";
 import { getDb } from "../db/client";
 import { oauthStates } from "../db/schema";
 import type { AppEnv } from "../env";
-import { saveFacebookPages, saveGoogleAccount, savePinterestAccount } from "../lib/accounts";
+import { saveFacebookPages, saveGoogleAccount } from "../lib/accounts";
 import { fail } from "../lib/http";
 import { log } from "../lib/log";
 import type { Db } from "../db/client";
 import * as drive from "../platforms/drive";
 import { PlatformError, PublishFailure } from "../platforms/errors";
 import * as facebook from "../platforms/facebook";
-import * as pinterest from "../platforms/pinterest";
 
 const STATE_TTL_MS = 10 * 60_000;
 type Env = AppEnv["Bindings"];
@@ -26,15 +25,6 @@ const connectors = {
       const cfg = facebook.facebookConfig(env);
       const userToken = await facebook.exchangeCode(cfg, uri, code);
       await saveFacebookPages(db, env, await facebook.listPages(cfg, userToken), now);
-    },
-  },
-  pinterest: {
-    authorizeUrl: (env, uri, state) => pinterest.authorizeUrl(pinterest.pinterestConfig(env), uri, state),
-    connect: async (env, db, uri, code, now) => {
-      const cfg = pinterest.pinterestConfig(env);
-      const tokens = await pinterest.exchangeCode(cfg, uri, code, now);
-      const username = await pinterest.getUsername(cfg, tokens.accessToken);
-      await savePinterestAccount(db, env, username, tokens, await pinterest.listBoards(cfg, tokens.accessToken), now);
     },
   },
   google: {
@@ -53,7 +43,7 @@ function platformParam(c: Context<AppEnv>): Platform {
   return p as Platform;
 }
 
-// Phải trùng khớp tuyệt đối với Redirect URI đã khai báo trên Meta/Pinterest/Google.
+// Phải trùng khớp tuyệt đối với Redirect URI đã khai báo trên Meta/Google.
 const redirectUri = (c: Context<AppEnv>, platform: Platform) =>
   `${new URL(c.req.url).origin}/api/oauth/${platform}/callback`;
 

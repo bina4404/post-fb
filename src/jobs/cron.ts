@@ -4,7 +4,6 @@ import { accounts, postTargets } from "../db/schema";
 import type { WorkerEnv } from "../env";
 import { log } from "../lib/log";
 import type { PublishMessage } from "./publish";
-import { refreshPinterestTokens } from "./refresh";
 
 // Lớn hơn thời gian chạy tối đa của một queue consumer (15 phút), nên không còn lệnh gọi nào đang chạy.
 export const STUCK_AFTER_MS = 20 * 60_000;
@@ -51,7 +50,6 @@ async function enqueueDue(db: Db, env: WorkerEnv, now: number) {
 /** Chạy mỗi phút (wrangler.jsonc triggers.crons). */
 export async function runCron(env: WorkerEnv, now = Date.now()) {
   const db = getDb(env);
-  await refreshPinterestTokens(db, env, now);
   await failStuck(db, now);
   await enqueueDue(db, env, now);
 }

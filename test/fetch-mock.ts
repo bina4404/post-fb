@@ -4,7 +4,7 @@ type Handler = (req: Request) => Response | Promise<Response>;
 
 /**
  * Mock fetch theo "METHOD origin+path" (bỏ query). Request không có trong bảng thì ném lỗi,
- * để test không bao giờ gọi thật Facebook/Pinterest.
+ * để test không bao giờ gọi thật Facebook/Google.
  */
 export function mockFetch(routes: Record<string, Handler>) {
   const calls: Request[] = [];

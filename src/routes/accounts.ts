@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import { getDb } from "../db/client";
-import { accounts, boards } from "../db/schema";
+import { accounts } from "../db/schema";
 import type { AppEnv } from "../env";
 import { fail, idParam, readJson } from "../lib/http";
 
@@ -13,20 +13,17 @@ export const accountRoutes = new Hono<AppEnv>();
 // Không bao giờ trả token: chỉ chọn các cột an toàn.
 accountRoutes.get("/", async (c) => {
   const db = getDb(c.env);
-  const [accountList, boardList] = await Promise.all([
-    db
-      .select({
-        id: accounts.id,
-        platform: accounts.platform,
-        name: accounts.name,
-        enabled: accounts.enabled,
-        status: accounts.status,
-        accessExpiresAt: accounts.accessExpiresAt,
-      })
-      .from(accounts),
-    db.select().from(boards),
-  ]);
-  return c.json({ accounts: accountList, boards: boardList });
+  const accountList = await db
+    .select({
+      id: accounts.id,
+      platform: accounts.platform,
+      name: accounts.name,
+      enabled: accounts.enabled,
+      status: accounts.status,
+      accessExpiresAt: accounts.accessExpiresAt,
+    })
+    .from(accounts);
+  return c.json({ accounts: accountList });
 });
 
 accountRoutes.patch("/:id", async (c) => {
@@ -45,13 +42,4 @@ accountRoutes.post("/:id/disconnect", async (c) => {
     .returning({ id: accounts.id });
   if (!row) throw fail(404, "không tìm thấy tài khoản");
   return c.body(null, 204);
-});
-
-export const boardRoutes = new Hono<AppEnv>();
-
-boardRoutes.patch("/:id", async (c) => {
-  const { enabled } = await readJson(c, enabledBody);
-  const [row] = await getDb(c.env).update(boards).set({ enabled }).where(eq(boards.id, idParam(c))).returning({ id: boards.id });
-  if (!row) throw fail(404, "không tìm thấy board");
-  return c.json({ id: row.id, enabled });
 });

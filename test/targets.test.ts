@@ -4,7 +4,7 @@ import { runCron } from "../src/jobs/cron";
 import { encryptToken } from "../src/lib/crypto";
 import { api, inHours, seed } from "./helpers";
 
-type Row = { id: number; platform: string; status: string; destination: string; boardName: string | null; scheduledAt: number };
+type Row = { id: number; platform: string; status: string; destination: string; scheduledAt: number };
 
 async function createPost(body: Record<string, unknown>) {
   const res = await api("/posts", { method: "POST", json: { caption: "c", ...body } });
@@ -17,17 +17,21 @@ const setTarget = (id: number, sql: string) => env.DB.prepare(`UPDATE post_targe
 beforeEach(seed);
 
 describe("GET /api/targets", () => {
-  it("lists one row per target with destination names, filterable by platform, status and time", async () => {
-    const [fb, pin] = await createPost({ facebookAccountId: 1, pinterestBoardId: 10, imageUrl: "https://i.test/a.jpg", scheduledAt: inHours(2) });
-    await createPost({ facebookAccountId: 1, scheduledAt: inHours(48) });
-    await setTarget(pin!, "status = 'failed'");
+  it("lists one row per target with the Page name, filterable by status and time", async () => {
+    const [soon] = await createPost({ facebookAccountId: 1, scheduledAt: inHours(2) });
+    const [failed] = await createPost({ facebookAccountId: 1, scheduledAt: inHours(3) });
+    const [later] = await createPost({ facebookAccountId: 1, scheduledAt: inHours(48) });
+    await setTarget(failed!, "status = 'failed'");
 
-    expect(await list()).toHaveLength(3);
-    expect((await list("?platform=pinterest")).map((r) => [r.id, r.destination, r.boardName])).toEqual([[pin, "Pin User", "Recipes"]]);
-    expect((await list("?status=failed")).map((r) => r.id)).toEqual([pin]);
+    expect((await list()).map((r) => [r.id, r.platform, r.destination])).toEqual([
+      [later, "facebook", "My Page"],
+      [failed, "facebook", "My Page"],
+      [soon, "facebook", "My Page"],
+    ]);
+    expect((await list("?status=failed")).map((r) => r.id)).toEqual([failed]);
     const from = Date.now();
     const to = from + 24 * 3_600_000;
-    expect((await list(`?from=${from}&to=${to}`)).map((r) => r.id).sort()).toEqual([fb, pin].sort());
+    expect((await list(`?from=${from}&to=${to}`)).map((r) => r.id).sort()).toEqual([soon, failed].sort());
   });
 
   it("rejects an unknown status", async () => {

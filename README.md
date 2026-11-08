@@ -1,6 +1,6 @@
 # post-fb
 
-Đăng bài theo lịch lên Facebook Page và Pinterest Board. Một Cloudflare Worker (Hono API + React SPA), dùng D1, Cron, Queues và Cloudflare Access; ảnh upload lưu trên Google Drive. Thiết kế chi tiết ở [PLAN.md](PLAN.md).
+Đăng bài theo lịch lên Facebook Page tại https://tools.new2h.com. Một Cloudflare Worker (Hono API + React SPA), dùng D1, Cron, Queues và Cloudflare Access; ảnh upload lưu trên Google Drive. Thiết kế chi tiết ở [PLAN.md](PLAN.md).
 
 ## Chạy local
 

@@ -28,8 +28,7 @@ export function ImportCsv({ onImported }: { onImported: () => void }) {
   return (
     <section className="space-y-3 rounded border bg-white p-4">
       <p className="text-sm text-gray-600">
-        Cột: <code>caption,link,image_url,platforms,scheduled_at,board</code>. <code>platforms</code> là{" "}
-        <code>facebook</code>, <code>pinterest</code> hoặc <code>facebook|pinterest</code>. <code>scheduled_at</code>{" "}
+        Cột: <code>caption,link,image_url,scheduled_at</code>. Bài đăng lên Page Facebook duy nhất đang bật. <code>scheduled_at</code>{" "}
         theo ISO 8601, không có offset thì hiểu là giờ Bangkok, để trống = nháp. Có một dòng lỗi thì không dòng nào được import.
       </p>
       <input type="file" accept=".csv,text/csv" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />

@@ -3,18 +3,11 @@ import { api, type TargetRow } from "../api";
 import { formatHour, formatTime } from "../time";
 import { Button, ErrorText, StatusBadge } from "./ui";
 
-function platformUrl(t: TargetRow): string | null {
-  if (!t.externalPostId) return null;
-  return t.platform === "facebook"
-    ? `https://www.facebook.com/${t.externalPostId}`
-    : `https://www.pinterest.com/pin/${t.externalPostId}/`;
-}
-
-/** Một target trên dashboard: giờ, đích, trạng thái, lỗi, link bài trên nền tảng, nút Đăng lại. */
+/** Một target trên dashboard: giờ, đích, trạng thái, lỗi, link bài trên Facebook, nút Đăng lại. */
 export function TargetItem({ target, compact, onChanged }: { target: TargetRow; compact?: boolean; onChanged: () => void }) {
   const [error, setError] = useState<string | null>(null);
-  const url = platformUrl(target);
-  const dest = target.platform === "pinterest" ? `Pinterest · ${target.boardName}` : `Facebook · ${target.destination}`;
+  const url = target.externalPostId ? `https://www.facebook.com/${target.externalPostId}` : null;
+  const dest = `Facebook · ${target.destination}`;
 
   async function retry() {
     setError(null);

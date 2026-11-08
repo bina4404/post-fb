@@ -1,13 +1,12 @@
 import { and, eq, lte, sql } from "drizzle-orm";
 import { getDb, type Db } from "../db/client";
-import { accounts, boards, posts, postTargets } from "../db/schema";
+import { accounts, posts, postTargets } from "../db/schema";
 import type { WorkerEnv } from "../env";
 import { decryptToken } from "../lib/crypto";
 import { loadImage } from "../lib/image";
 import { log } from "../lib/log";
 import { PublishFailure } from "../platforms/errors";
 import * as facebook from "../platforms/facebook";
-import * as pinterest from "../platforms/pinterest";
 
 export const MAX_RETRIES = 3;
 export const backoffMs = (attempts: number) => 2 ** attempts * 60_000; // 2, 4, 8 phút
@@ -35,13 +34,7 @@ async function send(env: WorkerEnv, db: Db, target: Target): Promise<string | nu
   if (!account.accessTokenEnc || account.status !== "ok" || !account.enabled) return null;
   const token = await decryptToken(account.accessTokenEnc, env.TOKEN_ENC_KEY);
   const image = await loadImage(env, post);
-
-  if (target.platform === "facebook") {
-    return facebook.publishPost(facebook.facebookConfig(env), account.externalId, token, { caption: post.caption, link: post.link, image });
-  }
-  const board = (await db.select().from(boards).where(eq(boards.id, target.boardId!)))[0]!;
-  if (!image) throw new PublishFailure("permanent", "Pinterest cần ảnh");
-  return pinterest.createPin(pinterest.pinterestConfig(env), token, { boardId: board.externalId, description: post.caption, link: post.link, image });
+  return facebook.publishPost(facebook.facebookConfig(env), account.externalId, token, { caption: post.caption, link: post.link, image });
 }
 
 async function recordFailure(db: Db, target: Target, err: PublishFailure, now: number): Promise<PublishResult> {

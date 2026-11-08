@@ -5,7 +5,6 @@ import { mockFetch } from "./fetch-mock";
 import { api, seed } from "./helpers";
 
 const GRAPH = "https://graph.facebook.com/v27.0";
-const PIN = "https://api.pinterest.test/v5";
 
 async function start(platform: string) {
   const res = await api(`/oauth/${platform}/start`);
@@ -24,7 +23,7 @@ describe("OAuth state (CSRF)", () => {
     expect((await callback("facebook", "state=nope&code=c")).status).toBe(400);
 
     const { state } = await start("facebook");
-    expect((await callback("pinterest", `state=${state}&code=c`)).status).toBe(400);
+    expect((await callback("google", `state=${state}&code=c`)).status).toBe(400);
 
     mockFetch({
       [`GET ${GRAPH}/oauth/access_token`]: () => Response.json({ access_token: "user-token" }),
@@ -91,41 +90,13 @@ describe("Facebook", () => {
   });
 });
 
-describe("Pinterest", () => {
-  it("exchanges the code with Basic auth and stores tokens, expiries and boards", async () => {
-    const { location, state } = await start("pinterest");
-    expect(location.searchParams.get("scope")).toBe("boards:read,pins:write,user_accounts:read");
-    const before = Date.now();
-    const calls = mockFetch({
-      [`POST ${PIN}/oauth/token`]: () =>
-        Response.json({ access_token: "pina_A", refresh_token: "pinr_R", expires_in: 2592000, refresh_token_expires_in: 5184000 }),
-      [`GET ${PIN}/user_account`]: () => Response.json({ username: "shop" }),
-      [`GET ${PIN}/boards`]: (req) =>
-        new URL(req.url).searchParams.get("bookmark")
-          ? Response.json({ items: [{ id: "b2", name: "Two" }], bookmark: null })
-          : Response.json({ items: [{ id: "b1", name: "One" }], bookmark: "next" }),
-    });
-    await callback("pinterest", `state=${state}&code=pcode`);
-
-    const tokenReq = calls[0]!;
-    expect(tokenReq.headers.get("authorization")).toBe(`Basic ${btoa("pin-app:pin-secret")}`);
-    expect(Object.fromEntries(await tokenReq.formData())).toEqual({
-      grant_type: "authorization_code",
-      code: "pcode",
-      redirect_uri: "http://localhost/api/oauth/pinterest/callback",
-    });
-
-    const acc = await env.DB.prepare("SELECT * FROM accounts WHERE platform = 'pinterest' AND external_id = 'shop'").first<Record<string, number | string>>();
-    expect(await decryptToken(String(acc!.refresh_token_enc), env.TOKEN_ENC_KEY)).toBe("pinr_R");
-    expect(Number(acc!.access_expires_at)).toBeGreaterThanOrEqual(before + 2592000_000);
-    const boards = await env.DB.prepare("SELECT name, enabled FROM boards WHERE account_id = ? ORDER BY name").bind(acc!.id).all();
-    expect(boards.results).toEqual([{ name: "One", enabled: 0 }, { name: "Two", enabled: 0 }]);
-  });
-});
-
 describe("account management", () => {
-  it("enables a board and disconnects an account without deleting it", async () => {
-    expect((await api("/boards/11", { method: "PATCH", json: { enabled: true } })).status).toBe(200);
+  it("Pinterest is no longer a supported platform", async () => {
+    expect((await api("/oauth/pinterest/start")).status).toBe(404);
+  });
+
+  it("enables a Page and disconnects an account without deleting it", async () => {
+    expect((await api("/accounts/2", { method: "PATCH", json: { enabled: true } })).status).toBe(200);
     expect((await api("/accounts/1/disconnect", { method: "POST" })).status).toBe(204);
     const row = await env.DB.prepare("SELECT access_token_enc, enabled, status FROM accounts WHERE id = 1").first();
     expect(row).toEqual({ access_token_enc: null, enabled: 0, status: "needs_reauth" });

@@ -35,7 +35,7 @@ async function fromDrive(env: WorkerEnv, fileId: string): Promise<Image> {
   try {
     return await downloadFile(await driveAccessToken(getDb(env), env, Date.now()), fileId);
   } catch (err) {
-    // Lỗi token Google không phải lỗi token của Facebook/Pinterest: không được đánh dấu account đích cần kết nối lại.
+    // Lỗi token Google không phải lỗi token của Facebook: không được đánh dấu account đích cần kết nối lại.
     if (err instanceof PlatformError && err.kind === "auth") throw new PublishFailure("permanent", "Google Drive cần kết nối lại");
     if (err instanceof PlatformError && err.status === 404) throw new PublishFailure("permanent", "ảnh trên Google Drive không còn");
     throw err;

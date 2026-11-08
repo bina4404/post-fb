@@ -11,14 +11,12 @@ Làm theo thứ tự. Mọi lệnh có `--remote`, `wrangler deploy` hay `wrangl
   npx wrangler queues create post-fb-publish
   ```
 - [ ] Dán `database_id` thật vào `wrangler.jsonc` (thay `00000000-…`) rồi commit. `database_id` không phải secret.
-- [ ] Chọn hostname, sửa `wrangler.jsonc`:
-  - **Custom domain (khuyến nghị):** thêm `"routes": [{ "pattern": "post.example.com", "custom_domain": true }]`. Domain phải là zone trong tài khoản Cloudflare của bạn.
-  - **`workers.dev`:** đặt `"workers_dev": true` và bật Access cho `*.workers.dev` (Workers → Settings → Domains & Routes → bật Cloudflare Access).
+- [ ] Hostname: **`tools.new2h.com`** (đã cấu hình trong `wrangler.jsonc`: `"routes": [{ "pattern": "tools.new2h.com", "custom_domain": true }]`, `"workers_dev": false`). Zone `new2h.com` phải nằm trong cùng tài khoản Cloudflare; lần deploy đầu Cloudflare tự tạo DNS record và chứng chỉ cho `tools.new2h.com`. Nếu `tools.new2h.com` đã có DNS record khác (A/CNAME), xoá record đó trước, nếu không deploy sẽ lỗi.
 - [ ] Không bật `preview_urls`: URL preview nằm ngoài Access.
 
 ## 2. Cloudflare Access
 
-- [ ] Zero Trust → Access → Applications → **Add → Self-hosted**, hostname là hostname ở bước 1.
+- [ ] Zero Trust → Access → Applications → mở app hiện có (AUD `58da…0c79`) → **Domains** → thêm `tools.new2h.com` → Save. Giữ cùng app thì AUD không đổi. Nếu tạo app mới (**Add → Self-hosted**, domain `tools.new2h.com`) thì AUD đổi, phải cập nhật `ACCESS_AUD`.
 - [ ] Policy **Allow** → Include → Emails: email của 1–5 người dùng.
 - [ ] Copy **Application Audience (AUD) Tag** và **team domain** (`<team>.cloudflareaccess.com`).
 - [ ] Điền vào `vars` trong `wrangler.jsonc`: `ACCESS_TEAM_DOMAIN` (không có `https://`) và `ACCESS_AUD`. Để trống thì mọi `/api/*` trả 403.
@@ -26,17 +24,10 @@ Làm theo thứ tự. Mọi lệnh có `--remote`, `wrangler deploy` hay `wrangl
 ## 3. Meta (Facebook)
 
 - [ ] developers.facebook.com → **Create App** → use case *Manage everything on your Page*.
-- [ ] Facebook Login → Settings → Valid OAuth Redirect URIs: `https://<host>/api/oauth/facebook/callback` (khớp tuyệt đối).
+- [ ] Facebook Login → Settings → Valid OAuth Redirect URIs: `https://tools.new2h.com/api/oauth/facebook/callback` (khớp tuyệt đối).
 - [ ] App roles: thêm từng người dùng làm Admin/Developer/Tester. Với người có vai trò trong app, quyền `pages_show_list`, `pages_read_engagement`, `pages_manage_posts` dùng được ở Standard Access, **không cần App Review**.
 - [ ] Chỉ khi cần người ngoài vai trò app dùng: Business Verification + App Review cho 3 quyền trên.
 - [ ] Ghi lại App ID và App Secret.
-
-## 4. Pinterest
-
-- [ ] Dùng **tài khoản Business**. App tạo sau 14/09/2026 có thể bị `403 PINNER_DATA_ACCESS_DENIED` với tài khoản thường.
-- [ ] developers.pinterest.com → **Create app** → Redirect URI: `https://<host>/api/oauth/pinterest/callback`.
-- [ ] App mới ở mức **Trial**: Pin chỉ tạo được trên sandbox. Xin **Standard access** sớm (có thể cần video demo).
-- [ ] Khi đã có Standard access: đổi `PINTEREST_API_BASE` trong `wrangler.jsonc` thành `https://api.pinterest.com/v5`. Đang là sandbox. Nếu bước đổi code OAuth bị lỗi trên sandbox, đổi sang production base để kết nối.
 
 ## 4b. Google Drive (lưu ảnh)
 
@@ -44,7 +35,7 @@ Làm theo thứ tự. Mọi lệnh có `--remote`, `wrangler deploy` hay `wrangl
 - [ ] **OAuth consent screen**: User type *External*, thêm scope `.../auth/drive.file`, thêm email của bạn vào *Test users*.
 - [ ] **Bắt buộc: bấm *Publish app* (chuyển sang *In production*).** Khi app còn ở *Testing*, refresh token của Google **hết hạn sau 7 ngày** và bạn sẽ phải kết nối lại mỗi tuần. `drive.file` là scope không nhạy cảm nên không cần Google xét duyệt; màn hình đồng ý có thể hiện cảnh báo "chưa xác minh", bấm tiếp tục.
 - [ ] **Credentials → Create credentials → OAuth client ID → Web application**. Authorized redirect URIs:
-  - `https://<host>/api/oauth/google/callback`
+  - `https://tools.new2h.com/api/oauth/google/callback`
   - `http://localhost:8787/api/oauth/google/callback` (để chạy local)
 - [ ] Ghi lại Client ID và Client secret.
 - [ ] Sau deploy: tab **Tài khoản → Kết nối Google Drive**. Chưa kết nối thì upload ảnh báo lỗi. Ảnh nằm ở thư mục gốc "My Drive" với tên `post-fb-<uuid>.png/jpg`; app chỉ thấy file do chính nó tạo.
@@ -56,8 +47,6 @@ openssl rand -base64 32   # giá trị cho TOKEN_ENC_KEY, cất ở password man
 npx wrangler secret put TOKEN_ENC_KEY
 npx wrangler secret put FB_APP_ID
 npx wrangler secret put FB_APP_SECRET
-npx wrangler secret put PINTEREST_APP_ID
-npx wrangler secret put PINTEREST_APP_SECRET
 npx wrangler secret put GOOGLE_CLIENT_ID
 npx wrangler secret put GOOGLE_CLIENT_SECRET
 ```
@@ -85,9 +74,9 @@ npx wrangler secret put GOOGLE_CLIENT_SECRET
 
 ## 8. Kiểm tra sau deploy
 
-- [ ] Mở `https://<host>`: phải hiện trang đăng nhập Access. Đăng nhập xong thì email hiện ở góc phải.
-- [ ] `curl -i https://<host>/api/me` không có cookie: phải trả **403** (hoặc trang login của Access).
-- [ ] Tab **Tài khoản** → Kết nối Facebook → tick Page. Kết nối Pinterest → tick tài khoản và Board.
+- [ ] Mở `https://tools.new2h.com`: phải hiện trang đăng nhập Access. Đăng nhập xong thì email hiện ở góc phải.
+- [ ] `curl -i https://tools.new2h.com/api/me` không có cookie: phải trả **403** (hoặc trang login của Access).
+- [ ] Tab **Tài khoản** → Kết nối Google Drive → Kết nối Facebook → tick Page.
 - [ ] Tab **Import CSV** → import 10 bài đặt giờ cách nhau vài phút.
 - [ ] Tab **Lịch đăng** → bài chuyển `scheduled` → `published` trong ≤ 2 phút sau giờ hẹn, có link "Xem bài".
 - [ ] Bài lỗi hiện lý do. Sửa nguyên nhân rồi bấm **Đăng lại**.
@@ -95,7 +84,7 @@ npx wrangler secret put GOOGLE_CLIENT_SECRET
 
 ## 9. Vận hành
 
-- **Bài "Cần xử lý" với lỗi "không rõ kết quả":** kiểm tra trên Facebook/Pinterest xem bài đã lên chưa. Chỉ bấm Đăng lại nếu chưa lên.
+- **Bài "Cần xử lý" với lỗi "không rõ kết quả":** kiểm tra trên Page Facebook xem bài đã lên chưa. Chỉ bấm Đăng lại nếu chưa lên.
 - **"Tài khoản cần kết nối lại":** vào tab Tài khoản, kết nối lại. Bài đang chờ sẽ tự đi ở phút cron kế tiếp.
 - **Rollback:** Workers → Deployments → chọn bản trước → *Rollback*, hoặc `npx wrangler rollback`. Migration không tự rollback.
 - **Sửa schema:** sửa `src/db/schema.ts` → `npm run db:generate` → commit file migration mới. Workers Builds tự áp dụng khi deploy.

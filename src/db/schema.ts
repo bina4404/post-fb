@@ -1,9 +1,9 @@
 import { index, integer, sqliteTable, text, unique } from "drizzle-orm/sqlite-core";
 
 // Mọi thời gian là epoch milliseconds UTC.
-const platform = () => text("platform", { enum: ["facebook", "pinterest"] }).notNull();
+const platform = () => text("platform", { enum: ["facebook"] }).notNull();
 // Tài khoản/OAuth còn có Google Drive (nơi lưu ảnh). Enum chỉ ở TypeScript, SQLite không có CHECK nên không cần migration.
-const accountPlatform = () => text("platform", { enum: ["facebook", "pinterest", "google"] }).notNull();
+const accountPlatform = () => text("platform", { enum: ["facebook", "google"] }).notNull();
 
 // Không bao giờ xoá dòng: post_targets trỏ tới đây. Ngắt kết nối = xoá token + enabled=false.
 export const accounts = sqliteTable(
@@ -24,6 +24,7 @@ export const accounts = sqliteTable(
   (t) => [unique().on(t.platform, t.externalId)],
 );
 
+// Không còn dùng (đã bỏ Pinterest). Giữ bảng và cột board_id để khỏi phải migration xoá dữ liệu.
 export const boards = sqliteTable(
   "boards",
   {

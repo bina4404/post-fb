@@ -6,7 +6,6 @@ import { Button, ErrorText, inputClass, StatusBadge } from "./ui";
 type Props = { posts: Post[]; dest: Destinations; onEdit: (p: Post) => void; onChanged: () => void };
 
 function targetLabel(t: Post["targets"][number], dest: Destinations) {
-  if (t.platform === "pinterest") return `Pinterest · ${dest.boards.find((b) => b.id === t.boardId)?.name ?? t.boardId}`;
   return `Facebook · ${dest.accounts.find((a) => a.id === t.accountId)?.name ?? t.accountId}`;
 }
 

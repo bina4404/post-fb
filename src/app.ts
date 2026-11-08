@@ -3,7 +3,7 @@ import { HTTPException } from "hono/http-exception";
 import type { AppEnv } from "./env";
 import { log } from "./lib/log";
 import { requireAccess } from "./middleware/access";
-import { accountRoutes, boardRoutes } from "./routes/accounts";
+import { accountRoutes } from "./routes/accounts";
 import { importRoutes } from "./routes/import";
 import { mediaRoutes } from "./routes/media";
 import { oauthRoutes } from "./routes/oauth";
@@ -23,7 +23,6 @@ app.route("/media", mediaRoutes);
 app.route("/import", importRoutes);
 app.route("/slots", slotRoutes);
 app.route("/accounts", accountRoutes);
-app.route("/boards", boardRoutes);
 app.route("/oauth", oauthRoutes);
 app.route("/targets", targetRoutes);
 

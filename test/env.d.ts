@@ -8,8 +8,6 @@ declare global {
       TOKEN_ENC_KEY: string;
       FB_APP_ID: string;
       FB_APP_SECRET: string;
-      PINTEREST_APP_ID: string;
-      PINTEREST_APP_SECRET: string;
       GOOGLE_CLIENT_ID: string;
       GOOGLE_CLIENT_SECRET: string;
     }

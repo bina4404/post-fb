@@ -7,14 +7,13 @@ import { mockFetch } from "./fetch-mock";
 import { api, DRIVE, seed, seedDrive } from "./helpers";
 
 const GRAPH = "https://graph.facebook.com/v27.0";
-const PIN = "https://api.pinterest.test/v5";
 const PNG = new Uint8Array([137, 80, 78, 71, 1, 2, 3]);
 
 type Row = Record<string, string | number | null>;
 const target = (id: number) => env.DB.prepare("SELECT * FROM post_targets WHERE id = ?").bind(id).first<Row>();
 const accountStatus = async (id: number) => (await env.DB.prepare("SELECT status FROM accounts WHERE id = ?").bind(id).first<Row>())!.status;
 
-/** Tạo bài qua API rồi đặt các target đến hạn ngay. Trả về id các target theo thứ tự facebook, pinterest. */
+/** Tạo bài qua API rồi đặt các target đến hạn ngay. Trả về id các target. */
 async function duePost(body: Record<string, unknown>): Promise<number[]> {
   const res = await api("/posts", { method: "POST", json: { caption: "Hello", ...body } });
   const post = (await res.json()) as { id: number; targets: { id: number }[] };
@@ -32,11 +31,8 @@ function fakeQueueEnv() {
 beforeEach(async () => {
   await seed();
   const fb = await encryptToken("PAGE-TOKEN", env.TOKEN_ENC_KEY);
-  const pin = await encryptToken("pina_TOKEN", env.TOKEN_ENC_KEY);
-  await env.DB.batch([
-    env.DB.prepare("UPDATE accounts SET access_token_enc = ? WHERE id = 1").bind(fb),
-    env.DB.prepare("UPDATE accounts SET access_token_enc = ?, access_expires_at = ? WHERE id = 2").bind(pin, Date.now() + 30 * 86_400_000),
-  ]);
+  // Bật cả 2 Page để test được trường hợp tắt một Page sau khi đã lên lịch.
+  await env.DB.prepare("UPDATE accounts SET access_token_enc = ?, enabled = 1").bind(fb).run();
 });
 afterEach(() => vi.restoreAllMocks());
 
@@ -75,21 +71,16 @@ describe("success", () => {
     expect(Object.fromEntries(await calls[0]!.formData())).toEqual({ message: "Hello", link: "https://shop.test", access_token: "PAGE-TOKEN" });
   });
 
-  it("creates a Pin with the image_url downloaded as base64", async () => {
-    const [id] = await duePost({ pinterestBoardId: 10, imageUrl: "https://img.test/a.png" });
+  it("downloads an image_url (from CSV) and posts it as a photo", async () => {
+    const [id] = await duePost({ facebookAccountId: 1, imageUrl: "https://img.test/a.png" });
     const calls = mockFetch({
       "GET https://img.test/a.png": () => new Response(PNG, { headers: { "content-type": "image/png" } }),
-      [`POST ${PIN}/pins`]: () => Response.json({ id: "pin1" }),
+      [`POST ${GRAPH}/page1/photos`]: () => Response.json({ id: "photo2", post_id: "page1_post2" }),
     });
     expect(await publishTarget(env, id!)).toBe("published");
-    const pinReq = calls[1]!;
-    expect(pinReq.headers.get("authorization")).toBe("Bearer pina_TOKEN");
-    expect(await pinReq.json()).toEqual({
-      board_id: "b-ext-1",
-      description: "Hello",
-      media_source: { source_type: "image_base64", content_type: "image/png", data: btoa(String.fromCharCode(...PNG)) },
-    });
-    expect((await target(id!))!.external_post_id).toBe("pin1");
+    const form = await calls[1]!.formData();
+    expect(new Uint8Array(await (form.get("source") as File).arrayBuffer())).toEqual(PNG);
+    expect((await target(id!))!.external_post_id).toBe("page1_post2");
   });
 });
 
@@ -168,14 +159,14 @@ describe("idempotency", () => {
 
   it("does not enqueue future, draft or disabled-account targets", async () => {
     const [due] = await duePost({ facebookAccountId: 1 });
-    const [, pinDue] = await duePost({ facebookAccountId: 1, pinterestBoardId: 10, imageUrl: "https://img.test/a.png" });
+    const [otherPage] = await duePost({ facebookAccountId: 2 });
     await api("/posts", { method: "POST", json: { caption: "draft", facebookAccountId: 1 } });
     await env.DB.prepare("UPDATE accounts SET enabled = 0 WHERE id = 2").run();
     const { env: cronEnv, sent } = fakeQueueEnv();
     await runCron(cronEnv);
     expect(sent).toContain(due);
-    expect(sent).not.toContain(pinDue);
-    expect(sent).toHaveLength(2);
+    expect(sent).not.toContain(otherPage);
+    expect(sent).toHaveLength(1);
   });
 });
 

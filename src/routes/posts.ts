@@ -16,8 +16,7 @@ const postBody = z.object({
   link: z.url({ protocol: /^https?$/ }).nullish(),
   imageKey: driveFileId.nullish(),
   imageUrl: z.url({ protocol: /^https$/ }).nullish(),
-  facebookAccountId: z.int().positive().nullish(),
-  pinterestBoardId: z.int().positive().nullish(),
+  facebookAccountId: z.int().positive(),
   scheduledAt: z.string().nullish(),
 });
 const contentBody = postBody.omit({ scheduledAt: true });
@@ -25,16 +24,8 @@ type PostBody = z.infer<typeof postBody>;
 
 async function toInput(db: Db, body: PostBody, now: number) {
   const dest = await loadDestinations(db);
-  const targets: TargetInput[] = [];
-  if (body.facebookAccountId) {
-    if (!dest.pages.some((p) => p.id === body.facebookAccountId)) throw fail(400, "Page Facebook không có hoặc chưa bật");
-    targets.push({ platform: "facebook", accountId: body.facebookAccountId, boardId: null });
-  }
-  if (body.pinterestBoardId) {
-    const board = dest.boards.find((b) => b.id === body.pinterestBoardId);
-    if (!board) throw fail(400, "Board Pinterest không có hoặc chưa bật");
-    targets.push({ platform: "pinterest", accountId: board.accountId, boardId: board.id });
-  }
+  if (!dest.pages.some((p) => p.id === body.facebookAccountId)) throw fail(400, "Page Facebook không có hoặc chưa bật");
+  const targets: TargetInput[] = [{ platform: "facebook", accountId: body.facebookAccountId }];
   const scheduledAt = body.scheduledAt ? parseScheduleTime(body.scheduledAt) : null;
   if (body.scheduledAt && (scheduledAt === null || scheduledAt <= now)) {
     throw fail(400, "scheduledAt phải là thời điểm hợp lệ trong tương lai");

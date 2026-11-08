@@ -12,15 +12,12 @@ async function uploadImage(file: File): Promise<string> {
 
 export function PostForm({ post, dest, onSaved, onCancel }: Props) {
   const pages = dest.accounts.filter((a) => a.platform === "facebook" && a.enabled);
-  const boards = dest.boards.filter((b) => b.enabled && dest.accounts.some((a) => a.id === b.accountId && a.enabled));
   const fbTarget = post?.targets.find((t) => t.platform === "facebook");
-  const pinTarget = post?.targets.find((t) => t.platform === "pinterest");
   const [caption, setCaption] = useState(post?.caption ?? "");
   const [link, setLink] = useState(post?.link ?? "");
   const [imageUrl, setImageUrl] = useState(post?.imageUrl ?? "");
   const [file, setFile] = useState<File | null>(null);
   const [pageId, setPageId] = useState(fbTarget ? String(fbTarget.accountId) : "");
-  const [boardId, setBoardId] = useState(pinTarget?.boardId ? String(pinTarget.boardId) : "");
   const [scheduledAt, setScheduledAt] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -37,7 +34,6 @@ export function PostForm({ post, dest, onSaved, onCancel }: Props) {
         imageKey,
         imageUrl: imageKey ? null : imageUrl || null,
         facebookAccountId: pageId ? Number(pageId) : null,
-        pinterestBoardId: boardId ? Number(boardId) : null,
         ...(post ? {} : { scheduledAt: scheduledAt || null }),
       };
       await api(post ? `/posts/${post.id}` : "/posts", { method: post ? "PATCH" : "POST", json: body });
@@ -63,23 +59,13 @@ export function PostForm({ post, dest, onSaved, onCancel }: Props) {
       <Field label="…hoặc URL ảnh (https)">
         <input className={inputClass} type="url" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} disabled={!!file} />
       </Field>
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Page Facebook">
-          <select className={inputClass} value={pageId} onChange={(e) => setPageId(e.target.value)}>
-            <option value="">— không đăng —</option>
-            {pages.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-        </Field>
-        <Field label="Board Pinterest">
-          <select className={inputClass} value={boardId} onChange={(e) => setBoardId(e.target.value)}>
-            <option value="">— không đăng —</option>
-            {boards.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-          </select>
-        </Field>
-      </div>
-      {pages.length + boards.length === 0 && (
-        <p className="text-sm text-amber-700">Chưa có Page/Board nào được kết nối và bật.</p>
-      )}
+      <Field label="Page Facebook">
+        <select className={inputClass} value={pageId} onChange={(e) => setPageId(e.target.value)} required>
+          <option value="">— chọn Page —</option>
+          {pages.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+      </Field>
+      {pages.length === 0 && <p className="text-sm text-amber-700">Chưa có Page nào được kết nối và bật (tab Tài khoản).</p>}
       {!post && (
         <Field label="Giờ đăng (giờ Bangkok, để trống = nháp)">
           <input className={inputClass} type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} />

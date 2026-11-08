@@ -1,9 +1,8 @@
 export type TargetStatus = "draft" | "scheduled" | "publishing" | "published" | "failed";
 export type Target = {
   id: number;
-  platform: "facebook" | "pinterest";
+  platform: "facebook";
   accountId: number;
-  boardId: number | null;
   status: TargetStatus;
   externalPostId: string | null;
   lastError: string | null;
@@ -19,9 +18,8 @@ export type Post = {
   createdAt: number;
   targets: Target[];
 };
-export type Account = { id: number; platform: "facebook" | "pinterest" | "google"; name: string; enabled: boolean; status: string };
-export type Board = { id: number; accountId: number; name: string; enabled: boolean };
-export type Destinations = { accounts: Account[]; boards: Board[] };
+export type Account = { id: number; platform: "facebook" | "google"; name: string; enabled: boolean; status: string };
+export type Destinations = { accounts: Account[] };
 export type Slot = { id: number; weekday: number; minuteOfDay: number };
 
 export class ApiError extends Error {
@@ -48,7 +46,7 @@ export async function api<T>(path: string, init: RequestInit & { json?: unknown 
 export type TargetRow = {
   id: number;
   postId: number;
-  platform: "facebook" | "pinterest";
+  platform: "facebook";
   status: TargetStatus;
   attempts: number;
   externalPostId: string | null;
@@ -57,6 +55,5 @@ export type TargetRow = {
   scheduledAt: number | null;
   caption: string;
   destination: string;
-  boardName: string | null;
   accountStatus: string;
 };

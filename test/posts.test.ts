@@ -13,17 +13,15 @@ async function createPost(body: Record<string, unknown> = {}) {
 beforeEach(seed);
 
 describe("posts", () => {
-  it("creates a draft with one target per destination", async () => {
-    const post = await createPost({ pinterestBoardId: 10, imageUrl: "https://i.test/a.jpg" });
+  it("creates a draft for the chosen Page", async () => {
+    const post = await createPost({ imageUrl: "https://i.test/a.jpg" });
     expect(post.scheduledAt).toBeNull();
-    expect(post.targets.map((t) => t.status)).toEqual(["draft", "draft"]);
+    expect(post.targets.map((t) => t.status)).toEqual(["draft"]);
   });
 
-  it("rejects Pinterest without an image and a disabled board", async () => {
-    const noImage = await api("/posts", { method: "POST", json: { caption: "x", pinterestBoardId: 10 } });
-    expect(noImage.status).toBe(400);
-    const disabled = await api("/posts", { method: "POST", json: { caption: "x", pinterestBoardId: 11, imageUrl: "https://i.test/a.jpg" } });
-    expect(disabled.status).toBe(400);
+  it("rejects a missing or disabled Page", async () => {
+    expect((await api("/posts", { method: "POST", json: { caption: "x" } })).status).toBe(400);
+    expect((await api("/posts", { method: "POST", json: { caption: "x", facebookAccountId: 2 } })).status).toBe(400);
   });
 
   it("blocks editing and deleting once a target is published", async () => {

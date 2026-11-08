@@ -29,7 +29,7 @@ export function App() {
   const tab = useHashTab();
   const [email, setEmail] = useState("");
   const [posts, setPosts] = useState<Post[]>([]);
-  const [dest, setDest] = useState<Destinations>({ accounts: [], boards: [] });
+  const [dest, setDest] = useState<Destinations>({ accounts: [] });
   const [editing, setEditing] = useState<Post | "new" | null>(null);
   const [error, setError] = useState<string | null>(null);
 

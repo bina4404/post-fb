@@ -27,7 +27,6 @@ function WeekCalendar({ start, rows, onChanged }: { start: number; rows: TargetR
 
 export function Dashboard() {
   const [view, setView] = useState<"list" | "week">("list");
-  const [platform, setPlatform] = useState("");
   const [status, setStatus] = useState("");
   const [start, setStart] = useState(() => weekStart(Date.now()));
   const [rows, setRows] = useState<TargetRow[]>([]);
@@ -35,24 +34,18 @@ export function Dashboard() {
 
   const load = useCallback(() => {
     const q = new URLSearchParams();
-    if (platform) q.set("platform", platform);
     if (status) q.set("status", status);
     if (view === "week") {
       q.set("from", String(start));
       q.set("to", String(start + 7 * DAY));
     }
     api<TargetRow[]>(`/targets?${q}`).then(setRows, (e: Error) => setError(e.message));
-  }, [platform, status, view, start]);
+  }, [status, view, start]);
   useEffect(load, [load]);
 
   return (
     <section className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <select className={`${inputClass} w-auto`} value={platform} onChange={(e) => setPlatform(e.target.value)} aria-label="Nền tảng">
-          <option value="">Mọi nền tảng</option>
-          <option value="facebook">Facebook</option>
-          <option value="pinterest">Pinterest</option>
-        </select>
         <select className={`${inputClass} w-auto`} value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Trạng thái">
           <option value="">Mọi trạng thái</option>
           {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}

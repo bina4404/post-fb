@@ -3,8 +3,9 @@
 	"name": "post-fb",
 	"main": "src/index.ts",
 	"compatibility_date": "2026-11-01",
-	// App chạy trên post-fb.bina4404.workers.dev, được Cloudflare Access bảo vệ (PLAN.md mục 10).
-	"workers_dev": true,
+	// Chỉ phục vụ qua tools.new2h.com (Cloudflare Access bảo vệ). Tắt *.workers.dev để không có hostname thứ hai.
+	"workers_dev": false,
+	"routes": [{ "pattern": "tools.new2h.com", "custom_domain": true }],
 	"preview_urls": false,
 	"observability": {
 		"enabled": true
@@ -46,7 +47,6 @@
 	},
 	"vars": {
 		"GRAPH_API_VERSION": "v27.0",
-		"PINTEREST_API_BASE": "https://api-sandbox.pinterest.com/v5",
 		"ACCESS_TEAM_DOMAIN": "bina4404.cloudflareaccess.com",
 		"ACCESS_AUD": "58da1241a30d5493391328a7d8b800ae0fe13c896106da3f0ca2055825990c79"
 	}

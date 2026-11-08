@@ -16,7 +16,7 @@ export function api(path: string, init: RequestInit & { json?: unknown } = {}) {
   );
 }
 
-/** Xoá sạch dữ liệu và tạo 1 Page FB + 1 Board Pinterest đang bật. */
+/** Xoá sạch dữ liệu và tạo 2 Page Facebook: id 1 đang bật, id 2 đang tắt. */
 export async function seed() {
   const now = Date.now();
   await env.DB.batch([
@@ -24,11 +24,8 @@ export async function seed() {
       env.DB.prepare(`DELETE FROM ${t}`),
     ),
     env.DB.prepare(
-      "INSERT INTO accounts (id, platform, external_id, name, enabled, updated_at) VALUES (1, 'facebook', 'page1', 'My Page', 1, ?), (2, 'pinterest', 'me', 'Pin User', 1, ?)",
+      "INSERT INTO accounts (id, platform, external_id, name, enabled, updated_at) VALUES (1, 'facebook', 'page1', 'My Page', 1, ?), (2, 'facebook', 'page2', 'Other Page', 0, ?)",
     ).bind(now, now),
-    env.DB.prepare(
-      "INSERT INTO boards (id, account_id, external_id, name, enabled) VALUES (10, 2, 'b-ext-1', 'Recipes', 1), (11, 2, 'b-ext-2', 'Hidden', 0)",
-    ),
   ]);
 }
 

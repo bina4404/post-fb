@@ -6,15 +6,13 @@ type Props = { dest: Destinations; onChanged: () => void };
 
 const SECTIONS = [
   { platform: "facebook", title: "Facebook Pages", button: "Facebook", hint: "Tick để chọn Page được dùng khi đăng bài." },
-  { platform: "pinterest", title: "Pinterest", button: "Pinterest", hint: "Tick để chọn tài khoản và Board được dùng khi đăng bài." },
   { platform: "google", title: "Google Drive (lưu ảnh)", button: "Google Drive", hint: "Ảnh upload được lưu vào Drive của tài khoản này. Bắt buộc kết nối trước khi upload ảnh." },
 ] as const;
 
 // Lỗi OAuth được callback trả về qua hash: #/accounts?error=...
 const oauthError = () => new URLSearchParams(location.hash.split("?")[1] ?? "").get("error");
 
-function AccountRow({ account, dest, run }: { account: Account; dest: Destinations; run: (p: Promise<unknown>) => void }) {
-  const boards = dest.boards.filter((b) => b.accountId === account.id);
+function AccountRow({ account, run }: { account: Account; run: (p: Promise<unknown>) => void }) {
   return (
     <li className="space-y-2 rounded border bg-white p-3">
       <div className="flex flex-wrap items-center gap-3">
@@ -36,18 +34,6 @@ function AccountRow({ account, dest, run }: { account: Account; dest: Destinatio
           Ngắt kết nối
         </Button>
       </div>
-      {boards.length > 0 && (
-        <ul className="flex flex-wrap gap-3 pl-6 text-sm">
-          {boards.map((b) => (
-            <li key={b.id}>
-              <label className="flex items-center gap-1">
-                <input type="checkbox" checked={b.enabled} onChange={(e) => run(api(`/boards/${b.id}`, { method: "PATCH", json: { enabled: e.target.checked } }))} />
-                {b.name}
-              </label>
-            </li>
-          ))}
-        </ul>
-      )}
     </li>
   );
 }
@@ -73,7 +59,7 @@ export function Accounts({ dest, onChanged }: Props) {
           <p className="text-xs text-gray-500">{hint}</p>
           <ul className="space-y-2">
             {dest.accounts.filter((a) => a.platform === platform).map((a) => (
-              <AccountRow key={a.id} account={a} dest={dest} run={run} />
+              <AccountRow key={a.id} account={a} run={run} />
             ))}
           </ul>
         </div>
