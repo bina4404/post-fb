@@ -127,3 +127,12 @@ export async function downloadFile(token: string, fileId: string): Promise<Drive
   const res = await call("download", `${DRIVE}/files/${fileId}?alt=media`, { headers: bearer(token) });
   return { bytes: new Uint8Array(await res.arrayBuffer()), contentType: res.headers.get("content-type") ?? "application/octet-stream" };
 }
+
+/** Ảnh nhỏ (khoảng 220px) do Drive tạo sẵn, để hiện trong danh sách. Drive chưa có ảnh nhỏ thì trả file gốc. */
+export async function downloadThumbnail(token: string, fileId: string): Promise<DriveFile> {
+  const meta = await call("thumbnail_link", `${DRIVE}/files/${fileId}?fields=thumbnailLink`, { headers: bearer(token) });
+  const { thumbnailLink } = (await meta.json()) as { thumbnailLink?: string };
+  if (!thumbnailLink) return downloadFile(token, fileId);
+  const res = await call("thumbnail", thumbnailLink, { headers: bearer(token) });
+  return { bytes: new Uint8Array(await res.arrayBuffer()), contentType: res.headers.get("content-type") ?? "image/jpeg" };
+}

@@ -85,6 +85,9 @@ npx wrangler secret put GOOGLE_CLIENT_SECRET
 
 ## 9. Vận hành
 
+- **Nhịp đăng (giảm rủi ro bị Facebook hạn chế):** app tự giãn ≥10 phút giữa 2 bài trên cùng Page, tối đa 25 bài/Page/24 giờ, và giãn 30–90 giây giữa các Page khi đăng cùng một nội dung. Bài chưa tới lượt vẫn ở trạng thái `scheduled` và tự đi sau. Đổi các con số này ở `src/lib/pacing.ts`.
+- **"Facebook tạm chặn Page này":** Facebook trả mã 368 (nghi lạm dụng). App dừng đăng lên Page đó. Kiểm tra thông báo trong Meta Business Suite / Page Quality, sửa nội dung vi phạm, rồi vào tab Tài khoản bấm **Kết nối Facebook** để chạy lại; bài lỗi bấm **Đăng lại**.
+
 - **Bài "Cần xử lý" với lỗi "không rõ kết quả":** kiểm tra trên Page Facebook xem bài đã lên chưa. Chỉ bấm Đăng lại nếu chưa lên.
 - **"Tài khoản cần kết nối lại":** vào tab Tài khoản, kết nối lại. Bài đang chờ sẽ tự đi ở phút cron kế tiếp.
 - **Rollback:** Workers → Deployments → chọn bản trước → *Rollback*, hoặc `npx wrangler rollback`. Migration không tự rollback.

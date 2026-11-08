@@ -27,7 +27,7 @@ export function Slots() {
   const [h = 0, m = 0] = time.split(":").map(Number);
   return (
     <section className="space-y-3 rounded border bg-white p-4">
-      <p className="text-sm text-gray-600">Khung giờ lặp lại hằng tuần (giờ Bangkok). "Xếp vào khung giờ" lấy khung trống sớm nhất.</p>
+      <p className="text-sm text-gray-600">Khung giờ lặp lại hằng tuần, tính theo múi giờ đang chọn ở góc trên. "Xếp vào khung giờ" lấy khung trống sớm nhất.</p>
       <div className="flex items-center gap-2">
         <select className={`${inputClass} w-auto`} value={weekday} onChange={(e) => setWeekday(Number(e.target.value))} aria-label="Thứ">
           {WEEKDAYS.map((d, i) => <option key={i} value={i}>{d}</option>)}

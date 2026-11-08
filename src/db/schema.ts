@@ -18,7 +18,8 @@ export const accounts = sqliteTable(
     accessExpiresAt: integer("access_expires_at"),
     refreshExpiresAt: integer("refresh_expires_at"),
     enabled: integer("enabled", { mode: "boolean" }).notNull().default(false),
-    status: text("status", { enum: ["ok", "needs_reauth"] }).notNull().default("ok"),
+    // paused: Facebook chặn Page vì nghi lạm dụng (mã 368); kết nối lại Facebook để chạy tiếp. Enum chỉ ở TypeScript.
+    status: text("status", { enum: ["ok", "needs_reauth", "paused"] }).notNull().default("ok"),
     updatedAt: integer("updated_at").notNull(),
   },
   (t) => [unique().on(t.platform, t.externalId)],

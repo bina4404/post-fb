@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { api, type Destinations, type Post } from "../api";
+import { localInputToIso, TIME_ZONES, useTz } from "../time";
 import { ImagePicker, type ImageChoice } from "./ImagePicker";
 import { Button, ErrorText, Field, inputClass } from "./ui";
 
@@ -42,6 +43,7 @@ export function PostForm({ post, dest, onSaved, onCancel }: Props) {
   const [scheduledAt, setScheduledAt] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const tz = useTz();
 
   async function save(publishNow: boolean) {
     if (pageIds.length === 0) return setError("Chọn ít nhất 1 Page Facebook");
@@ -56,7 +58,7 @@ export function PostForm({ post, dest, onSaved, onCancel }: Props) {
         imageKey,
         imageUrl: imageKey ? null : image.imageUrl || null,
         facebookAccountIds: pageIds,
-        ...(post || publishNow ? {} : { scheduledAt: scheduledAt || null }),
+        ...(post || publishNow ? {} : { scheduledAt: scheduledAt ? (localInputToIso(scheduledAt, tz) ?? scheduledAt) : null }),
       };
       const saved = await api<Post>(post ? `/posts/${post.id}` : "/posts", { method: post ? "PATCH" : "POST", json: body });
       if (publishNow) await api(`/posts/${saved.id}/publish-now`, { method: "POST" });
@@ -80,7 +82,7 @@ export function PostForm({ post, dest, onSaved, onCancel }: Props) {
       <ImagePicker value={image} onChange={setImage} />
       <PagePicker pages={pages} selected={pageIds} onChange={setPageIds} />
       {!post && (
-        <Field label="Giờ đăng (giờ Bangkok, để trống = nháp)">
+        <Field label={`Giờ đăng (${TIME_ZONES.find((z) => z.id === tz)?.label}; để trống = nháp)`}>
           <input className={inputClass} type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} />
         </Field>
       )}

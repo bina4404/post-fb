@@ -1,22 +1,23 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, type TargetRow } from "../api";
-import { DAY, formatDay, weekStart } from "../time";
+import { formatDay, startOfLocalDay, useTz, weekStart } from "../time";
 import { TargetItem } from "./TargetItem";
 import { Button, ErrorText, inputClass } from "./ui";
 
 const STATUSES = ["draft", "scheduled", "publishing", "published", "failed"] as const;
 
 function WeekCalendar({ start, rows, onChanged }: { start: number; rows: TargetRow[]; onChanged: () => void }) {
-  const days = Array.from({ length: 7 }, (_, i) => start + i * DAY);
+  const tz = useTz();
+  const days = Array.from({ length: 7 }, (_, i) => startOfLocalDay(start, tz, i));
   return (
     <div className="grid grid-cols-1 gap-2 md:grid-cols-7">
       {days.map((day) => {
         const items = rows
-          .filter((r) => r.scheduledAt !== null && r.scheduledAt >= day && r.scheduledAt < day + DAY)
+          .filter((r) => r.scheduledAt !== null && r.scheduledAt >= day && r.scheduledAt < startOfLocalDay(day, tz, 1))
           .sort((a, b) => a.scheduledAt! - b.scheduledAt!);
         return (
           <div key={day} className="min-h-24 space-y-2 rounded bg-gray-100 p-2">
-            <h3 className="text-xs font-semibold">{formatDay(day)}</h3>
+            <h3 className="text-xs font-semibold">{formatDay(day, tz)}</h3>
             {items.map((t) => <TargetItem key={t.id} target={t} compact onChanged={onChanged} />)}
           </div>
         );
@@ -28,7 +29,10 @@ function WeekCalendar({ start, rows, onChanged }: { start: number; rows: TargetR
 export function Dashboard() {
   const [view, setView] = useState<"list" | "week">("list");
   const [status, setStatus] = useState("");
-  const [start, setStart] = useState(() => weekStart(Date.now()));
+  const tz = useTz();
+  const [start, setStart] = useState(() => weekStart(Date.now(), tz));
+  // Đổi múi giờ thì tuần được tính lại theo múi giờ mới.
+  useEffect(() => setStart((s) => weekStart(s, tz)), [tz]);
   const [rows, setRows] = useState<TargetRow[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -37,10 +41,10 @@ export function Dashboard() {
     if (status) q.set("status", status);
     if (view === "week") {
       q.set("from", String(start));
-      q.set("to", String(start + 7 * DAY));
+      q.set("to", String(startOfLocalDay(start, tz, 7)));
     }
     api<TargetRow[]>(`/targets?${q}`).then(setRows, (e: Error) => setError(e.message));
-  }, [status, view, start]);
+  }, [status, view, start, tz]);
   useEffect(load, [load]);
 
   return (
@@ -53,10 +57,10 @@ export function Dashboard() {
         <Button onClick={() => setView(view === "list" ? "week" : "list")}>{view === "list" ? "Xem theo tuần" : "Xem danh sách"}</Button>
         {view === "week" && (
           <>
-            <Button onClick={() => setStart(start - 7 * DAY)} aria-label="Tuần trước">‹</Button>
-            <span className="text-sm">{formatDay(start)} – {formatDay(start + 6 * DAY)}</span>
-            <Button onClick={() => setStart(start + 7 * DAY)} aria-label="Tuần sau">›</Button>
-            <Button onClick={() => setStart(weekStart(Date.now()))}>Tuần này</Button>
+            <Button onClick={() => setStart(startOfLocalDay(start, tz, -7))} aria-label="Tuần trước">‹</Button>
+            <span className="text-sm">{formatDay(start, tz)} – {formatDay(startOfLocalDay(start, tz, 6), tz)}</span>
+            <Button onClick={() => setStart(startOfLocalDay(start, tz, 7))} aria-label="Tuần sau">›</Button>
+            <Button onClick={() => setStart(weekStart(Date.now(), tz))}>Tuần này</Button>
           </>
         )}
         <Button onClick={load} className="ml-auto">Tải lại</Button>

@@ -1,9 +1,10 @@
+import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 import { parseCsv } from "../src/lib/csv";
 import { api, count, inHours, seed } from "./helpers";
 
 const header = "caption,link,image_url,scheduled_at";
-const dest = { pages: [{ id: 1, name: "My Page" }] };
+const dest = { pages: [{ id: 1, name: "My Page", externalId: "page1" }] };
 const BOM = String.fromCharCode(0xfeff);
 
 describe("parseCsv", () => {
@@ -37,13 +38,20 @@ describe("parseCsv", () => {
     expect("errors" in result && result.errors.map((e) => e.line)).toEqual([3, 4, 5, 6, 7]);
   });
 
-  it("requires exactly one enabled Facebook Page", () => {
+  it("needs at least one enabled Page, and a pages column when several are enabled", () => {
     const csv = [header, "x,,,"].join("\n");
-    expect(parseCsv(csv, { pages: [] }, Date.now())).toEqual({
-      errors: [{ line: 1, message: "cần đúng 1 Page Facebook đang bật, hiện có 0" }],
-    });
-    const two = { pages: [{ id: 1, name: "A" }, { id: 2, name: "B" }] };
-    expect(parseCsv(csv, two, Date.now())).toMatchObject({ errors: [{ line: 1 }] });
+    expect(parseCsv(csv, { pages: [] }, Date.now())).toEqual({ errors: [{ line: 1, message: "chưa bật Page Facebook nào (tab Tài khoản)" }] });
+    const two = { pages: [{ id: 1, name: "A", externalId: "111" }, { id: 2, name: "B", externalId: "222" }] };
+    expect(parseCsv(csv, two, Date.now())).toMatchObject({ errors: [{ line: 2 }] });
+  });
+
+  it("sends a row to the Pages named in the pages column, by name or Facebook id", () => {
+    const three = { pages: [{ id: 1, name: "Shop A", externalId: "111" }, { id: 2, name: "Shop B", externalId: "222" }, { id: 3, name: "Shop C", externalId: "333" }] };
+    const csv = [header + ",pages", "one,,,,shop a", "two,,,,111 | 222 | Shop A", "bad,,,,Nope"].join("\n");
+    const result = parseCsv(csv, three, Date.now());
+    expect(result).toEqual({ errors: [{ line: 4, message: 'không có Page đang bật tên/id "Nope"' }] });
+    const ok = parseCsv([header + ",pages", "one,,,,shop a", "two,,,,111 | 222 | Shop A"].join("\n"), three, Date.now());
+    expect("posts" in ok && ok.posts.map((p) => p.targets.map((t) => t.accountId))).toEqual([[1], [1, 2]]);
   });
 
   it("ignores old platforms/board columns and accepts the UTF-8 BOM", () => {
@@ -78,5 +86,28 @@ describe("POST /api/import", () => {
       expect(post.targets.map((t) => t.status)).toEqual(["scheduled"]);
       expect(post.targets[0]!.idempotencyKey).toBe(`${post.targets[0]!.postId}:facebook:1`);
     }
+  });
+});
+
+describe("time zones in CSV", () => {
+  it("reads scheduled_at without offset in the chosen zone", () => {
+    const csv = ["caption,link,image_url,scheduled_at", "x,,,2099-07-01 09:00"].join("\n");
+    const result = parseCsv(csv, { pages: [{ id: 1, name: "P", externalId: "p" }] }, Date.now(), "Europe/London");
+    expect(result).toMatchObject({ posts: [{ scheduledAt: Date.parse("2099-07-01T08:00:00Z") }] });
+  });
+
+  it("rejects an unsupported zone on import", async () => {
+    await seed();
+    expect((await api("/import?tz=Mars/Base", { method: "POST", body: "caption,link,image_url,scheduled_at" })).status).toBe(400);
+  });
+});
+
+describe("import with several enabled Pages", () => {
+  it("imports rows to the Pages in the pages column", async () => {
+    await seed();
+    await env.DB.prepare("UPDATE accounts SET enabled = 1").run();
+    const csv = ["caption,link,image_url,scheduled_at,pages", "hello,,,,My Page|page2"].join("\n");
+    expect(await (await api("/import", { method: "POST", body: csv })).json()).toEqual({ imported: 1 });
+    expect(await count("post_targets")).toBe(2);
   });
 });

@@ -4,6 +4,7 @@ import { accounts, posts, postTargets } from "../db/schema";
 import type { WorkerEnv } from "../env";
 import { decryptToken } from "../lib/crypto";
 import { loadImage } from "../lib/image";
+import { JITTER_S, pageReadyAt, rateLimitBackoffMs } from "../lib/pacing";
 import { log } from "../lib/log";
 import { PublishFailure } from "../platforms/errors";
 import * as facebook from "../platforms/facebook";
@@ -39,13 +40,16 @@ async function send(env: WorkerEnv, db: Db, target: Target): Promise<string | nu
 
 async function recordFailure(db: Db, target: Target, err: PublishFailure, now: number): Promise<PublishResult> {
   const base = { lockedAt: null, lastError: err.message, updatedAt: now };
-  if (err.kind === "transient" && target.attempts <= MAX_RETRIES) {
-    await db.update(postTargets).set({ ...base, status: "scheduled", nextAttemptAt: now + backoffMs(target.attempts) }).where(eq(postTargets.id, target.id));
+  const retryable = err.kind === "transient" || err.kind === "rate_limited";
+  if (retryable && target.attempts <= MAX_RETRIES) {
+    const wait = err.kind === "rate_limited" ? rateLimitBackoffMs(target.attempts) : backoffMs(target.attempts);
+    await db.update(postTargets).set({ ...base, status: "scheduled", nextAttemptAt: now + wait }).where(eq(postTargets.id, target.id));
     return "retry";
   }
   await db.update(postTargets).set({ ...base, status: "failed", needsAttention: true }).where(eq(postTargets.id, target.id));
-  // Token hỏng: các bài khác của account này nằm chờ (cron bỏ qua account needs_reauth) cho tới khi kết nối lại.
-  if (err.kind === "auth") await db.update(accounts).set({ status: "needs_reauth", updatedAt: now }).where(eq(accounts.id, target.accountId));
+  // Token hỏng / Page bị chặn: các bài khác của Page này nằm chờ (cron chỉ lấy account 'ok') cho tới khi kết nối lại.
+  const pause = err.kind === "auth" ? "needs_reauth" : err.kind === "blocked" ? "paused" : null;
+  if (pause) await db.update(accounts).set({ status: pause, updatedAt: now }).where(eq(accounts.id, target.accountId));
   return "failed";
 }
 
@@ -53,6 +57,15 @@ export async function publishTarget(env: WorkerEnv, targetId: number, now = Date
   const db = getDb(env);
   const target = await claim(db, targetId, now);
   if (!target) return "skipped";
+
+  // Giãn cách theo Page: chưa tới lượt thì trả target về hàng đợi, không tính là một lần thử.
+  const readyAt = await pageReadyAt(db, target.accountId, target.id, now);
+  if (readyAt !== null) {
+    const nextAttemptAt = readyAt + Math.floor(Math.random() * JITTER_S * 1000);
+    await db.update(postTargets).set({ status: "scheduled", attempts: target.attempts - 1, nextAttemptAt, lockedAt: null, updatedAt: now }).where(eq(postTargets.id, target.id));
+    log("info", "publish_paced", { targetId, accountId: target.accountId, nextAttemptAt });
+    return "waiting";
+  }
 
   let externalId: string | null;
   try {

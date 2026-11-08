@@ -51,7 +51,7 @@ describe("POST /api/targets/:id/retry", () => {
 
     const sendBatch = vi.fn();
     await runCron({ ...env, PUBLISH_QUEUE: { sendBatch } as unknown as Queue }, Date.now() + 1000);
-    expect(sendBatch).toHaveBeenCalledWith([{ body: { targetId: id } }]);
+    expect(sendBatch).toHaveBeenCalledWith([expect.objectContaining({ body: { targetId: id } })]);
   });
 
   it("refuses targets that are not failed or already exist on the platform", async () => {

@@ -3,7 +3,7 @@ import { getDb } from "../db/client";
 import type { AppEnv } from "../env";
 import { driveAccessToken } from "../lib/accounts";
 import { fail } from "../lib/http";
-import { downloadFile, driveFileId, ensureFolder, listImages, uploadFile } from "../platforms/drive";
+import { downloadFile, downloadThumbnail, driveFileId, ensureFolder, listImages, uploadFile } from "../platforms/drive";
 import { PublishFailure } from "../platforms/errors";
 
 // Giới hạn ảnh của Facebook /photos: PNG tối đa 1MB, JPEG tối đa 4MB.
@@ -48,9 +48,11 @@ mediaRoutes.get("/", async (c) => {
 });
 
 // Xem trước ảnh trong UI: Worker đọc từ Drive rồi trả lại, file trên Drive không cần chia sẻ công khai.
+// ?thumb=1: chỉ lấy ảnh nhỏ cho danh sách, không tải file gốc (tối đa 4MB) cho từng ô.
 mediaRoutes.get("/:key", async (c) => {
   const key = driveFileId.safeParse(c.req.param("key"));
   if (!key.success) throw fail(404, "không tìm thấy ảnh");
-  const file = await viaDrive(async () => downloadFile(await driveAccessToken(getDb(c.env), c.env, Date.now()), key.data));
+  const read = c.req.query("thumb") ? downloadThumbnail : downloadFile;
+  const file = await viaDrive(async () => read(await driveAccessToken(getDb(c.env), c.env, Date.now()), key.data));
   return new Response(file.bytes, { headers: { "content-type": file.contentType, "cache-control": "private, max-age=3600" } });
 });

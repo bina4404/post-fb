@@ -13,7 +13,7 @@ export type PostInput = {
   scheduledAt: number | null;
   targets: TargetInput[];
 };
-export type Destinations = { pages: { id: number; name: string }[] };
+export type Destinations = { pages: { id: number; name: string; externalId: string }[] };
 
 /** Quy tắc nội dung dùng chung cho API và CSV. Trả về lỗi, hoặc null nếu hợp lệ. */
 export function contentError(p: Omit<PostInput, "scheduledAt">): string | null {
@@ -24,7 +24,7 @@ export function contentError(p: Omit<PostInput, "scheduledAt">): string | null {
 
 export async function loadDestinations(db: Db): Promise<Destinations> {
   const pages = await db
-    .select({ id: accounts.id, name: accounts.name })
+    .select({ id: accounts.id, name: accounts.name, externalId: accounts.externalId })
     .from(accounts)
     .where(and(eq(accounts.platform, "facebook"), eq(accounts.enabled, true)));
   return { pages };

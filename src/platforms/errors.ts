@@ -1,7 +1,10 @@
 import { log } from "../lib/log";
 
-/** transient: thử lại được. auth: token hỏng, cần kết nối lại. permanent: sửa dữ liệu/quyền mới hết. */
-export type ErrorKind = "transient" | "permanent" | "auth";
+/**
+ * transient: thử lại được. rate_limited: vượt giới hạn API, thử lại chậm hơn. auth: token hỏng, cần kết nối lại.
+ * blocked: nền tảng chặn vì nghi lạm dụng, phải dừng hẳn. permanent: sửa dữ liệu/quyền mới hết.
+ */
+export type ErrorKind = "transient" | "rate_limited" | "auth" | "blocked" | "permanent";
 export type PlatformName = "facebook" | "google";
 
 /** Lỗi khi đăng bài mà publisher biết cách xử lý (retry hoặc dừng). */

@@ -153,3 +153,18 @@ describe("Google OAuth", () => {
     expect(await decryptToken(String(row!.refresh_token_enc), env.TOKEN_ENC_KEY)).toBe("1//R");
   });
 });
+
+describe("library thumbnails", () => {
+  it("serves Drive's small thumbnail instead of the full image", async () => {
+    await seedDrive();
+    const calls = mockFetch({
+      [`GET ${DRIVE}/files/drive-file-123`]: () => Response.json({ thumbnailLink: "https://lh3.test/thumb=s220" }),
+      "GET https://lh3.test/thumb=s220": () => new Response(new Uint8Array([1, 2]), { headers: { "content-type": "image/jpeg" } }),
+    });
+    const res = await api("/media/drive-file-123?thumb=1");
+    expect(res.headers.get("content-type")).toBe("image/jpeg");
+    expect(new Uint8Array(await res.arrayBuffer())).toEqual(new Uint8Array([1, 2]));
+    expect(new URL(calls[0]!.url).searchParams.get("fields")).toBe("thumbnailLink");
+    expect(calls[1]!.headers.get("authorization")).toBe("Bearer ya29.ACCESS");
+  });
+});

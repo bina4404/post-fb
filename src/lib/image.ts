@@ -11,6 +11,30 @@ const ALLOWED = new Set(["image/jpeg", "image/png"]);
 // Chặn ảnh quá lớn trước khi đọc vào bộ nhớ Worker. Giới hạn riêng của từng nền tảng do nền tảng tự trả lỗi.
 const MAX_BYTES = 10 * 1024 * 1024;
 
+/** Đọc body theo từng đoạn và dừng ngay khi vượt `max` byte, để file lớn không chiếm hết bộ nhớ Worker. */
+async function readLimited(body: ReadableStream<Uint8Array> | null, max: number): Promise<Uint8Array> {
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  const reader = body?.getReader();
+  for (;;) {
+    const part = reader ? await reader.read() : { done: true as const, value: undefined };
+    if (part.done) break;
+    size += part.value.length;
+    if (size > max) {
+      await reader!.cancel();
+      throw new PublishFailure("permanent", "image_url quá 10MB");
+    }
+    chunks.push(part.value);
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const c of chunks) {
+    bytes.set(c, offset);
+    offset += c.length;
+  }
+  return bytes;
+}
+
 async function fromUrl(url: string): Promise<Image> {
   let res: Response;
   try {
@@ -26,8 +50,7 @@ async function fromUrl(url: string): Promise<Image> {
   const contentType = (res.headers.get("content-type") ?? "").split(";")[0]!.trim();
   if (!ALLOWED.has(contentType)) throw new PublishFailure("permanent", `image_url không phải JPEG/PNG (${contentType || "không rõ"})`);
   if (Number(res.headers.get("content-length") ?? 0) > MAX_BYTES) throw new PublishFailure("permanent", "image_url quá 10MB");
-  const bytes = new Uint8Array(await res.arrayBuffer());
-  if (bytes.length > MAX_BYTES) throw new PublishFailure("permanent", "image_url quá 10MB");
+  const bytes = await readLimited(res.body, MAX_BYTES);
   return { bytes, contentType };
 }
 

@@ -3,6 +3,7 @@ import { HTTPException } from "hono/http-exception";
 import type { AppEnv } from "./env";
 import { log } from "./lib/log";
 import { requireAccess } from "./middleware/access";
+import { sameOriginWrites } from "./middleware/same-origin";
 import { accountRoutes } from "./routes/accounts";
 import { importRoutes } from "./routes/import";
 import { mediaRoutes } from "./routes/media";
@@ -14,6 +15,7 @@ import { targetRoutes } from "./routes/targets";
 
 export const app = new Hono<AppEnv>().basePath("/api");
 
+app.use("*", sameOriginWrites);
 app.use("*", requireAccess);
 
 app.get("/me", (c) => c.json({ email: c.get("email") }));

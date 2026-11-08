@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { api, type TargetRow } from "../api";
-import { formatHour, formatTime } from "../time";
+import { formatHour, formatTime, useTz } from "../time";
 import { Button, ErrorText, StatusBadge } from "./ui";
 
 /** Một target trên dashboard: giờ, đích, trạng thái, lỗi, link bài trên Facebook, nút Đăng lại. */
 export function TargetItem({ target, compact, onChanged }: { target: TargetRow; compact?: boolean; onChanged: () => void }) {
   const [error, setError] = useState<string | null>(null);
+  const tz = useTz();
   const url = target.externalPostId ? `https://www.facebook.com/${target.externalPostId}` : null;
   const dest = `Facebook · ${target.destination}`;
 
@@ -23,7 +24,7 @@ export function TargetItem({ target, compact, onChanged }: { target: TargetRow; 
     <div className={`space-y-1 rounded border bg-white p-2 text-sm ${target.needsAttention ? "border-red-400" : ""}`}>
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-gray-500">
-          {target.scheduledAt ? (compact ? formatHour(target.scheduledAt) : formatTime(target.scheduledAt)) : "Nháp"}
+          {target.scheduledAt ? (compact ? formatHour(target.scheduledAt, tz) : formatTime(target.scheduledAt, tz)) : "Nháp"}
         </span>
         <StatusBadge status={target.status} />
         {target.needsAttention && <span className="text-xs font-semibold text-red-700">Cần xử lý</span>}

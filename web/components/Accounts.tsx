@@ -30,6 +30,9 @@ function AccountRow({ account, run }: { account: Account; run: (p: Promise<unkno
           </label>
         )}
         {account.status === "needs_reauth" && <span className="text-sm text-red-700">Cần kết nối lại</span>}
+        {account.status === "paused" && (
+          <span className="text-sm text-red-700">Facebook tạm chặn Page này (nghi lạm dụng): đã tạm dừng đăng. Kiểm tra Page, rồi bấm Kết nối Facebook để chạy lại.</span>
+        )}
         <Button className="ml-auto" onClick={() => confirm(`Ngắt kết nối ${account.name}?`) && run(api(`/accounts/${account.id}/disconnect`, { method: "POST" }))}>
           Ngắt kết nối
         </Button>

@@ -16,12 +16,17 @@ export const facebookConfig = (env: WorkerEnv): FacebookConfig => ({
 export const FACEBOOK_SCOPES = ["pages_show_list", "pages_read_engagement", "pages_manage_posts", "business_management"];
 
 type GraphError = { message?: string; code?: number; is_transient?: boolean };
-// Mã lỗi tạm thời theo Graph API (lỗi không xác định, dịch vụ, giới hạn rate).
-const TRANSIENT_CODES = new Set([1, 2, 4, 17, 32, 341, 613]);
+// Mã lỗi Graph API: lỗi tạm thời của dịch vụ; vượt giới hạn gọi (app/user/Page/BUC); bị chặn vì nghi lạm dụng.
+const TRANSIENT_CODES = new Set([1, 2, 341]);
+const RATE_LIMIT_CODES = new Set([4, 17, 32, 613, 80001]);
+const BLOCKED_CODES = new Set([368]);
 
 function classify(status: number, error: GraphError | undefined): ErrorKind {
-  if (error?.code === 190) return "auth";
-  if (error?.is_transient || TRANSIENT_CODES.has(error?.code ?? -1) || status === 429 || status >= 500) return "transient";
+  const code = error?.code ?? -1;
+  if (code === 190) return "auth";
+  if (BLOCKED_CODES.has(code)) return "blocked";
+  if (RATE_LIMIT_CODES.has(code) || status === 429) return "rate_limited";
+  if (error?.is_transient || TRANSIENT_CODES.has(code) || status >= 500) return "transient";
   return "permanent";
 }
 

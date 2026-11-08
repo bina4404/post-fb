@@ -6,7 +6,8 @@ import { ImportCsv } from "./components/ImportCsv";
 import { PostForm } from "./components/PostForm";
 import { PostList } from "./components/PostList";
 import { Slots } from "./components/Slots";
-import { Button, ErrorText } from "./components/ui";
+import { Button, ErrorText, inputClass } from "./components/ui";
+import { loadTz, saveTz, TIME_ZONES, TzContext, type TimeZone } from "./time";
 
 const TABS = { dashboard: "Lịch đăng", library: "Thư viện", import: "Import CSV", slots: "Khung giờ", accounts: "Tài khoản" } as const;
 type Tab = keyof typeof TABS;
@@ -32,6 +33,8 @@ export function App() {
   const [dest, setDest] = useState<Destinations>({ accounts: [] });
   const [editing, setEditing] = useState<Post | "new" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [tz, setTz] = useState<TimeZone>(loadTz);
+  const changeTz = (value: TimeZone) => (setTz(value), saveTz(value));
 
   const reload = useCallback(() => {
     Promise.all([api<Post[]>("/posts"), api<Destinations>("/accounts")])
@@ -45,10 +48,19 @@ export function App() {
   }, [reload]);
 
   return (
+    <TzContext.Provider value={tz}>
     <main className="mx-auto max-w-5xl space-y-4 p-4">
-      <header className="flex items-center justify-between border-b pb-3">
+      <header className="flex flex-wrap items-center justify-between gap-2 border-b pb-3">
         <h1 className="text-xl font-semibold">post-fb</h1>
-        <span className="text-sm text-gray-600">{email}</span>
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-2 text-sm">
+            <span className="text-gray-600">Múi giờ</span>
+            <select className={`${inputClass} w-auto`} value={tz} onChange={(e) => changeTz(e.target.value as TimeZone)}>
+              {TIME_ZONES.map((z) => <option key={z.id} value={z.id}>{z.label}</option>)}
+            </select>
+          </label>
+          <span className="text-sm text-gray-600">{email}</span>
+        </div>
       </header>
       <nav className="flex gap-4 text-sm">
         {Object.entries(TABS).map(([key, label]) => (
@@ -77,5 +89,6 @@ export function App() {
       {tab === "slots" && <Slots />}
       {tab === "accounts" && <Accounts dest={dest} onChanged={reload} />}
     </main>
+    </TzContext.Provider>
   );
 }

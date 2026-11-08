@@ -7,6 +7,7 @@ import type { AppEnv } from "../env";
 import { fail, idParam, readJson } from "../lib/http";
 import { contentError, insertPost, loadDestinations, targetRows, type TargetInput } from "../lib/posts";
 import { parseScheduleTime } from "../lib/time";
+import { UNKNOWN_OUTCOME_ERROR } from "../jobs/cron";
 import { driveFileId } from "../platforms/drive";
 
 const postBody = z.object({
@@ -57,6 +58,13 @@ function assertEditable(post: Awaited<ReturnType<typeof loadPost>>) {
   }
 }
 
+/** Sửa bài tạo lại mọi target. Target "không rõ kết quả" có thể đã lên Facebook, tạo lại sẽ đăng trùng. */
+function assertNoUnknownOutcome(post: Awaited<ReturnType<typeof loadPost>>) {
+  if (post.targets.some((t) => t.status === "failed" && t.lastError === UNKNOWN_OUTCOME_ERROR)) {
+    throw fail(409, "có Page không rõ đã đăng hay chưa: kiểm tra trên Facebook, rồi dùng Đăng lại hoặc xoá bài");
+  }
+}
+
 export const postRoutes = new Hono<AppEnv>();
 
 postRoutes.get("/", async (c) => {
@@ -84,6 +92,7 @@ postRoutes.patch("/:id", async (c) => {
   const now = Date.now();
   const post = await loadPost(db, id);
   assertEditable(post);
+  assertNoUnknownOutcome(post);
   // Lịch chỉ đổi qua /schedule, nên body PATCH không có scheduledAt và giữ lịch cũ.
   const input = await toInput(db, await readJson(c, contentBody), now);
   const { caption, link, imageKey, imageUrl } = input;

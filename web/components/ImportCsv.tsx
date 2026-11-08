@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { api, ApiError } from "../api";
+import { TIME_ZONES, useTz } from "../time";
 import { Button, ErrorText, FileButton } from "./ui";
 
 type LineError = { line: number; message: string };
@@ -9,6 +10,7 @@ export function ImportCsv({ onImported }: { onImported: () => void }) {
   const [errors, setErrors] = useState<LineError[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<number | null>(null);
+  const tz = useTz();
 
   async function upload() {
     if (!file) return;
@@ -16,7 +18,7 @@ export function ImportCsv({ onImported }: { onImported: () => void }) {
     setError(null);
     setDone(null);
     try {
-      const res = await api<{ imported: number }>("/import", { method: "POST", body: await file.text() });
+      const res = await api<{ imported: number }>(`/import?tz=${encodeURIComponent(tz)}`, { method: "POST", body: await file.text() });
       setDone(res.imported);
       onImported();
     } catch (err) {
@@ -28,8 +30,8 @@ export function ImportCsv({ onImported }: { onImported: () => void }) {
   return (
     <section className="space-y-3 rounded border bg-white p-4">
       <p className="text-sm text-gray-600">
-        Cột: <code>caption,link,image_url,scheduled_at</code>. Bài đăng lên Page Facebook duy nhất đang bật. <code>scheduled_at</code>{" "}
-        theo ISO 8601, không có offset thì hiểu là giờ Bangkok, để trống = nháp. Có một dòng lỗi thì không dòng nào được import.
+        Cột: <code>caption,link,image_url,scheduled_at</code>, thêm cột tuỳ chọn <code>pages</code> (tên hoặc id Page, nhiều Page ngăn cách bằng <code>|</code>; bỏ trống khi chỉ bật 1 Page). <code>scheduled_at</code>{" "}
+        theo ISO 8601, không có offset thì hiểu là giờ theo múi giờ đang chọn ({TIME_ZONES.find((z) => z.id === tz)?.label}), để trống = nháp. Có một dòng lỗi thì không dòng nào được import.
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <FileButton label="Chọn file CSV" accept=".csv,text/csv" file={file} onChange={setFile} />

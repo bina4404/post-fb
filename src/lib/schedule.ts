@@ -9,7 +9,10 @@ export function scheduleFields(at: number | null) {
     : { status: "scheduled" as const, nextAttemptAt: at };
 }
 
-/** Nơi duy nhất đổi lịch của bài đã có. Không đụng target đã đăng hoặc đang đăng. */
+/**
+ * Nơi duy nhất đổi lịch của bài đã có. Chỉ đổi target draft/scheduled: target đã đăng, đang đăng hoặc lỗi
+ * (có thể đã lên Facebook mà không rõ) chỉ được đẩy lại bằng nút "Đăng lại", để không bao giờ đăng trùng.
+ */
 export async function setSchedule(db: Db, postId: number, at: number | null, now: number) {
   await db.batch([
     db.update(posts).set({ scheduledAt: at, updatedAt: now }).where(eq(posts.id, postId)),
@@ -26,7 +29,7 @@ export async function setSchedule(db: Db, postId: number, at: number | null, now
       .where(
         and(
           eq(postTargets.postId, postId),
-          notInArray(postTargets.status, ["published", "publishing"]),
+          notInArray(postTargets.status, ["published", "publishing", "failed"]),
         ),
       ),
   ]);

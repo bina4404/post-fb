@@ -134,12 +134,13 @@ describe("idempotency", () => {
   it("publishes once even when cron runs twice and messages are duplicated", async () => {
     const [id] = await duePost({ facebookAccountIds: [1] });
     const { env: cronEnv, sent } = fakeQueueEnv();
-    await runCron(cronEnv);
-    await runCron(cronEnv);
+    const now = Date.now();
+    await runCron(cronEnv, now);
+    await runCron(cronEnv, now + 60_000); // message đầu coi như bị trễ/mất: cron đẩy lại sau giờ gửi đã hẹn
     expect(sent).toEqual([id, id]);
 
     const calls = mockFetch({ [`POST ${GRAPH}/page1/feed`]: () => Response.json({ id: "page1_once" }) });
-    const results = await Promise.all(sent.map((targetId) => publishTarget(env, targetId)));
+    const results = await Promise.all(sent.map((targetId) => publishTarget(env, targetId, now + 120_000)));
     expect(results.sort()).toEqual(["published", "skipped"]);
     expect(calls).toHaveLength(1);
   });
@@ -178,4 +179,17 @@ it("queue consumer acks every message, even when publishing crashes", async () =
   await handleQueue({ messages: [msg(id!), msg(-1)] } as unknown as MessageBatch<{ targetId: number }>, env);
   expect(ack).toHaveBeenCalledTimes(2);
   expect((await target(id!))!.status).toBe("published");
+});
+
+it("stops reading an image_url bigger than 10MB even without Content-Length", async () => {
+  const [id] = await duePost({ facebookAccountIds: [1], imageUrl: "https://img.test/huge.png" });
+  let pulled = 0;
+  const chunk = new Uint8Array(1024 * 1024);
+  mockFetch({
+    "GET https://img.test/huge.png": () =>
+      new Response(new ReadableStream({ pull: (c) => (pulled++ < 50 ? c.enqueue(chunk) : c.close()) }), { headers: { "content-type": "image/png" } }),
+  });
+  expect(await publishTarget(env, id!)).toBe("failed");
+  expect(await target(id!)).toMatchObject({ status: "failed", last_error: "image_url quá 10MB" });
+  expect(pulled).toBeLessThan(15); // dừng ngay sau khi vượt 10MB, không đọc hết 50MB
 });
