@@ -12,7 +12,8 @@ export const facebookConfig = (env: WorkerEnv): FacebookConfig => ({
   version: env.GRAPH_API_VERSION,
 });
 
-export const FACEBOOK_SCOPES = ["pages_show_list", "pages_read_engagement", "pages_manage_posts"];
+// business_management: không có quyền này, /me/accounts không trả về Page mà người dùng quản lý qua Business Portfolio.
+export const FACEBOOK_SCOPES = ["pages_show_list", "pages_read_engagement", "pages_manage_posts", "business_management"];
 
 type GraphError = { message?: string; code?: number; is_transient?: boolean };
 // Mã lỗi tạm thời theo Graph API (lỗi không xác định, dịch vụ, giới hạn rate).

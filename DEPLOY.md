@@ -25,7 +25,8 @@ Làm theo thứ tự. Mọi lệnh có `--remote`, `wrangler deploy` hay `wrangl
 
 - [ ] developers.facebook.com → **Create App** → use case *Manage everything on your Page*.
 - [ ] Facebook Login → Settings → Valid OAuth Redirect URIs: `https://tools.new2h.com/api/oauth/facebook/callback` (khớp tuyệt đối).
-- [ ] App roles: thêm từng người dùng làm Admin/Developer/Tester. Với người có vai trò trong app, quyền `pages_show_list`, `pages_read_engagement`, `pages_manage_posts` dùng được ở Standard Access, **không cần App Review**.
+- [ ] App roles: thêm từng người dùng làm Admin/Developer/Tester. Với người có vai trò trong app, quyền `pages_show_list`, `pages_read_engagement`, `pages_manage_posts`, `business_management` dùng được ở Standard Access, **không cần App Review**.
+- [ ] Use cases → *Manage everything on your Page* → **Customize** → thêm quyền **`business_management`**. Thiếu quyền này, Facebook không liệt kê các Page bạn quản lý qua Business Portfolio (Meta Business Suite) và app chỉ thấy 0–1 Page.
 - [ ] Chỉ khi cần người ngoài vai trò app dùng: Business Verification + App Review cho 3 quyền trên.
 - [ ] Ghi lại App ID và App Secret.
 

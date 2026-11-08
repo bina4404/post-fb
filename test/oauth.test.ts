@@ -42,7 +42,7 @@ describe("Facebook", () => {
   it("redirects to the v27.0 dialog with the Page scopes", async () => {
     const { location } = await start("facebook");
     expect(location.origin + location.pathname).toBe("https://www.facebook.com/v27.0/dialog/oauth");
-    expect(location.searchParams.get("scope")).toBe("pages_show_list,pages_read_engagement,pages_manage_posts");
+    expect(location.searchParams.get("scope")).toBe("pages_show_list,pages_read_engagement,pages_manage_posts,business_management");
     expect(location.searchParams.get("redirect_uri")).toBe("http://localhost/api/oauth/facebook/callback");
   });
 
