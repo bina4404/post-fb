@@ -1,5 +1,6 @@
 // Adapter duy nhất gọi Meta Graph API. Tài liệu: developers.facebook.com/docs/pages-api, .../access-tokens/get-long-lived
 import type { WorkerEnv } from "../env";
+import { log } from "../lib/log";
 import { fetchWithTimeout, platformError, type ErrorKind } from "./errors";
 
 export type FacebookConfig = { appId: string; appSecret: string; version: string };
@@ -64,13 +65,19 @@ export async function exchangeCode(cfg: FacebookConfig, redirectUri: string, cod
 /** Các Page người dùng được phép đăng bài. Page token lấy từ user token dài hạn thì không hết hạn. */
 export async function listPages(cfg: FacebookConfig, userToken: string): Promise<FacebookPage[]> {
   // shortcut: lấy tối đa 100 Page, không theo trang tiếp; đủ cho 1–5 người dùng.
-  const res = await graph<{ data: { id: string; name: string; access_token: string; tasks?: string[] }[] }>(
+  const res = await graph<{ data: { id: string; name: string; access_token: string; tasks?: string[] }[]; paging?: { next?: string } }>(
     "list_pages",
     graphUrl(cfg, "me/accounts", { fields: "id,name,access_token,tasks", limit: "100", access_token: userToken }),
   );
-  return res.data
-    .filter((p) => !p.tasks || p.tasks.includes("CREATE_CONTENT"))
-    .map((p) => ({ id: p.id, name: p.name, accessToken: p.access_token }));
+  const postable = res.data.filter((p) => !p.tasks || p.tasks.includes("CREATE_CONTENT"));
+  // Ghi lại Page nào Facebook trả về và Page nào bị bỏ qua vì thiếu quyền tạo nội dung (không log token).
+  log("info", "facebook_pages_listed", {
+    returned: res.data.length,
+    postable: postable.length,
+    hasNextPage: Boolean(res.paging?.next),
+    pages: res.data.map((p) => `${p.name} [${p.tasks?.join("|") ?? "no tasks"}]`).join("; "),
+  });
+  return postable.map((p) => ({ id: p.id, name: p.name, accessToken: p.access_token }));
 }
 
 export type Image = { bytes: Uint8Array; contentType: string };
