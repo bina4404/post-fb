@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type DragEvent } from "react";
 import { api } from "../api";
 import { Button, ErrorText, FileButton, inputClass } from "./ui";
+
+const ACCEPTED = ["image/jpeg", "image/png"];
 
 /** Đúng một nguồn ảnh: file mới (upload lên Drive khi lưu), ảnh có sẵn trên Drive (imageKey), hoặc URL https. */
 export type ImageChoice = { file: File | null; imageKey: string | null; imageUrl: string };
@@ -51,24 +53,52 @@ function previewSrc(v: ImageChoice, objectUrl: string | null): string | null {
 export function ImagePicker({ value, onChange }: { value: ImageChoice; onChange: (v: ImageChoice) => void }) {
   const [showDrive, setShowDrive] = useState(false);
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [dropError, setDropError] = useState<string | null>(null);
   useEffect(() => {
     if (!value.file) return setObjectUrl(null);
     const url = URL.createObjectURL(value.file);
     setObjectUrl(url);
     return () => URL.revokeObjectURL(url);
   }, [value.file]);
+  // Thả trượt ra ngoài khung thì trình duyệt mở ảnh trong tab và mất nội dung form đang soạn: chặn việc đó.
+  useEffect(() => {
+    const stop = (e: Event) => e.preventDefault();
+    addEventListener("dragover", stop);
+    addEventListener("drop", stop);
+    return () => (removeEventListener("dragover", stop), removeEventListener("drop", stop));
+  }, []);
   const src = previewSrc(value, objectUrl);
+  const pickFile = (file: File | null) => (setDropError(null), onChange({ file, imageKey: null, imageUrl: "" }));
+
+  function onDrop(e: DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    setDragging(false);
+    const file = e.dataTransfer.files[0];
+    if (!file) return;
+    if (!ACCEPTED.includes(file.type)) return setDropError(`"${file.name}" không phải ảnh JPEG/PNG`);
+    pickFile(file);
+  }
+  // Rời vào phần tử con của vùng thả cũng phát dragleave: chỉ tắt viền khi thật sự ra khỏi vùng.
+  const onDragLeave = (e: DragEvent<HTMLDivElement>) => !e.currentTarget.contains(e.relatedTarget as Node | null) && setDragging(false);
 
   return (
     <fieldset className="space-y-2 text-sm">
       <legend className="mb-1 font-medium">Ảnh (JPEG ≤4MB, PNG ≤1MB; ảnh mới lưu vào thư mục post-fb trên Google Drive)</legend>
-      <div className="flex flex-wrap items-center gap-2">
-        <FileButton label="Tải ảnh từ máy" accept="image/jpeg,image/png" file={value.file} onChange={(file) => onChange({ file, imageKey: null, imageUrl: "" })} />
+      <div
+        onDragOver={(e) => (e.preventDefault(), setDragging(true))}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
+        className={`flex flex-wrap items-center gap-2 rounded border-2 border-dashed p-3 ${dragging ? "border-blue-600 bg-blue-50" : "border-gray-300"}`}
+      >
+        <FileButton label="Tải ảnh từ máy" accept={ACCEPTED.join(",")} file={value.file} onChange={pickFile} />
+        <span className="text-gray-500">{dragging ? "Thả ảnh vào đây" : "hoặc kéo thả ảnh vào khung này"}</span>
         <Button type="button" onClick={() => setShowDrive(!showDrive)} aria-expanded={showDrive}>
           {showDrive ? "Đóng Google Drive" : "Chọn từ Google Drive"}
         </Button>
         {src && <Button type="button" onClick={() => onChange({ file: null, imageKey: null, imageUrl: "" })}>Bỏ ảnh</Button>}
       </div>
+      <ErrorText error={dropError} />
       {showDrive && <DriveGallery selected={value.imageKey} onPick={(imageKey) => (onChange({ file: null, imageKey, imageUrl: "" }), setShowDrive(false))} />}
       <input
         className={inputClass}
