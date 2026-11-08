@@ -71,14 +71,49 @@ export async function getEmail(token: string): Promise<string> {
   return ((await res.json()) as { user: { emailAddress: string } }).user.emailAddress;
 }
 
-/** Upload kiểu multipart/related (metadata + nội dung trong một request). Trả về id của file. */
-export async function uploadFile(token: string, name: string, file: DriveFile): Promise<string> {
+const FOLDER_MIME = "application/vnd.google-apps.folder";
+export const DRIVE_FOLDER = "post-fb";
+
+const listUrl = (q: string, fields: string, extra: Record<string, string> = {}) =>
+  `${DRIVE}/files?${new URLSearchParams({ q, fields, ...extra })}`;
+
+/**
+ * Id thư mục "post-fb" trong My Drive, tạo mới nếu chưa có. Với scope drive.file app chỉ thấy thư mục do chính nó tạo.
+ * shortcut: hai lần upload đầu tiên chạy song song có thể tạo 2 thư mục cùng tên; lần sau luôn dùng thư mục tìm thấy đầu tiên.
+ */
+export async function ensureFolder(token: string): Promise<string> {
+  const q = `name = '${DRIVE_FOLDER}' and mimeType = '${FOLDER_MIME}' and trashed = false`;
+  const found = await call("find_folder", listUrl(q, "files(id)", { pageSize: "1", orderBy: "createdTime" }), { headers: bearer(token) });
+  const [folder] = ((await found.json()) as { files: { id: string }[] }).files;
+  if (folder) return folder.id;
+  const res = await call("create_folder", `${DRIVE}/files?fields=id`, {
+    method: "POST",
+    headers: { ...bearer(token), "content-type": "application/json" },
+    body: JSON.stringify({ name: DRIVE_FOLDER, mimeType: FOLDER_MIME }),
+  });
+  return ((await res.json()) as { id: string }).id;
+}
+
+export type DriveImage = { id: string; name: string; thumbnailLink?: string; createdTime: string };
+
+/** Ảnh trong thư mục post-fb, mới nhất trước. shortcut: tối đa 100 ảnh, thêm phân trang khi thư viện lớn hơn. */
+export async function listImages(token: string, folderId: string): Promise<DriveImage[]> {
+  const q = `'${folderId}' in parents and trashed = false and mimeType contains 'image/'`;
+  const res = await call("list_images", listUrl(q, "files(id,name,thumbnailLink,createdTime)", { orderBy: "createdTime desc", pageSize: "100" }), {
+    headers: bearer(token),
+  });
+  return ((await res.json()) as { files: DriveImage[] }).files;
+}
+
+/** Upload kiểu multipart/related (metadata + nội dung trong một request) vào thư mục `folderId`. Trả về id của file. */
+export async function uploadFile(token: string, folderId: string, name: string, file: DriveFile): Promise<string> {
   const boundary = `post-fb-${crypto.randomUUID()}`;
+  const CRLF = "\r\n";
   const body = new Blob([
-    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ name })}\r\n`,
-    `--${boundary}\r\nContent-Type: ${file.contentType}\r\n\r\n`,
+    `--${boundary}${CRLF}Content-Type: application/json; charset=UTF-8${CRLF}${CRLF}${JSON.stringify({ name, parents: [folderId] })}${CRLF}`,
+    `--${boundary}${CRLF}Content-Type: ${file.contentType}${CRLF}${CRLF}`,
     file.bytes,
-    `\r\n--${boundary}--`,
+    `${CRLF}--${boundary}--`,
   ]);
   const res = await call("upload", "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id", {
     method: "POST",
@@ -91,8 +126,4 @@ export async function uploadFile(token: string, name: string, file: DriveFile): 
 export async function downloadFile(token: string, fileId: string): Promise<DriveFile> {
   const res = await call("download", `${DRIVE}/files/${fileId}?alt=media`, { headers: bearer(token) });
   return { bytes: new Uint8Array(await res.arrayBuffer()), contentType: res.headers.get("content-type") ?? "application/octet-stream" };
-}
-
-export async function deleteFile(token: string, fileId: string): Promise<void> {
-  await call("delete", `${DRIVE}/files/${fileId}`, { method: "DELETE", headers: bearer(token) });
 }

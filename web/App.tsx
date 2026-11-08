@@ -67,7 +67,7 @@ export function App() {
               onCancel={() => setEditing(null)}
             />
           ) : (
-            <Button onClick={() => setEditing("new")}>+ Bài mới</Button>
+            <Button variant="primary" onClick={() => setEditing("new")}>+ Tạo bài mới</Button>
           )}
           <PostList posts={posts} dest={dest} onEdit={setEditing} onChanged={reload} />
         </section>

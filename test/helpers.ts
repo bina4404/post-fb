@@ -5,14 +5,15 @@ import { encryptToken } from "../src/lib/crypto";
 const bypassEnv = { ...env, DEV_AUTH_BYPASS: "1" } as typeof env;
 
 /** Gọi API như người dùng đã đăng nhập (bypass Access trên localhost). */
-export function api(path: string, init: RequestInit & { json?: unknown } = {}) {
+/** `overrides` thay binding cho riêng request này, ví dụ queue giả. */
+export function api(path: string, init: RequestInit & { json?: unknown } = {}, overrides: Partial<typeof env> = {}) {
   const { json, ...rest } = init;
   const headers = new Headers(rest.headers);
   if (json !== undefined) headers.set("content-type", "application/json");
   return app.request(
     `http://localhost/api${path}`,
     { ...rest, headers, body: json !== undefined ? JSON.stringify(json) : rest.body },
-    bypassEnv,
+    { ...bypassEnv, ...overrides },
   );
 }
 

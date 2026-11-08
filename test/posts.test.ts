@@ -2,10 +2,10 @@ import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 import { api, inHours, seed } from "./helpers";
 
-type Post = { id: number; scheduledAt: number | null; targets: { status: string; nextAttemptAt: number | null }[] };
+type Post = { id: number; scheduledAt: number | null; targets: { id: number; status: string; nextAttemptAt: number | null }[] };
 
 async function createPost(body: Record<string, unknown> = {}) {
-  const res = await api("/posts", { method: "POST", json: { caption: "hi", facebookAccountId: 1, ...body } });
+  const res = await api("/posts", { method: "POST", json: { caption: "hi", facebookAccountIds: [1], ...body } });
   expect(res.status).toBe(201);
   return (await res.json()) as Post;
 }
@@ -21,19 +21,19 @@ describe("posts", () => {
 
   it("rejects a missing or disabled Page", async () => {
     expect((await api("/posts", { method: "POST", json: { caption: "x" } })).status).toBe(400);
-    expect((await api("/posts", { method: "POST", json: { caption: "x", facebookAccountId: 2 } })).status).toBe(400);
+    expect((await api("/posts", { method: "POST", json: { caption: "x", facebookAccountIds: [2] } })).status).toBe(400);
   });
 
   it("blocks editing and deleting once a target is published", async () => {
     const post = await createPost();
     await env.DB.prepare("UPDATE post_targets SET status = 'published' WHERE post_id = ?").bind(post.id).run();
-    expect((await api(`/posts/${post.id}`, { method: "PATCH", json: { caption: "new", facebookAccountId: 1 } })).status).toBe(409);
+    expect((await api(`/posts/${post.id}`, { method: "PATCH", json: { caption: "new", facebookAccountIds: [1] } })).status).toBe(409);
     expect((await api(`/posts/${post.id}`, { method: "DELETE" })).status).toBe(409);
   });
 
   it("edits content but keeps the schedule", async () => {
     const post = await createPost({ scheduledAt: inHours(3) });
-    const res = await api(`/posts/${post.id}`, { method: "PATCH", json: { caption: "new", facebookAccountId: 1 } });
+    const res = await api(`/posts/${post.id}`, { method: "PATCH", json: { caption: "new", facebookAccountIds: [1] } });
     const edited = (await res.json()) as Post;
     expect(edited.scheduledAt).toBe(post.scheduledAt);
     expect(edited.targets[0]!.status).toBe("scheduled");
@@ -73,5 +73,50 @@ describe("schedule", () => {
       const local = new Date(t + 7 * 3_600_000);
       expect([local.getUTCDay(), local.getUTCHours(), local.getUTCMinutes()]).toEqual([1, 9, 0]);
     }
+  });
+});
+
+describe("several Pages per post", () => {
+  beforeEach(() => env.DB.prepare("UPDATE accounts SET enabled = 1").run());
+
+  it("creates one target per Page, ignoring duplicates", async () => {
+    const res = await api("/posts", { method: "POST", json: { caption: "x", facebookAccountIds: [1, 2, 1] } });
+    const post = (await res.json()) as { targets: { accountId: number; idempotencyKey: string }[] };
+    expect(post.targets.map((t) => t.accountId).sort()).toEqual([1, 2]);
+    expect(new Set(post.targets.map((t) => t.idempotencyKey)).size).toBe(2);
+  });
+
+  it("editing replaces the set of Pages", async () => {
+    const post = await createPost({ facebookAccountIds: [1, 2] });
+    const res = await api(`/posts/${post.id}`, { method: "PATCH", json: { caption: "x", facebookAccountIds: [2] } });
+    expect(((await res.json()) as { targets: { accountId: number }[] }).targets.map((t) => t.accountId)).toEqual([2]);
+  });
+
+  it("rejects the whole post if any Page is disabled", async () => {
+    await env.DB.prepare("UPDATE accounts SET enabled = 0 WHERE id = 2").run();
+    expect((await api("/posts", { method: "POST", json: { caption: "x", facebookAccountIds: [1, 2] } })).status).toBe(400);
+  });
+});
+
+describe("publish now", () => {
+  it("schedules every unpublished target for now and sends them to the queue", async () => {
+    await env.DB.prepare("UPDATE accounts SET enabled = 1").run();
+    const post = await createPost({ facebookAccountIds: [1, 2] });
+    const sent: number[] = [];
+    const queue = { sendBatch: async (msgs: { body: { targetId: number } }[]) => void sent.push(...msgs.map((m) => m.body.targetId)) };
+    const before = Date.now();
+    const res = await api(`/posts/${post.id}/publish-now`, { method: "POST" }, { PUBLISH_QUEUE: queue as unknown as Queue });
+    const updated = (await res.json()) as Post;
+    expect(updated.targets.every((t) => t.status === "scheduled" && t.nextAttemptAt! >= before && t.nextAttemptAt! <= Date.now())).toBe(true);
+    expect(sent.sort()).toEqual(updated.targets.map((t) => t.id).sort());
+  });
+
+  it("does not resend targets that are already published", async () => {
+    const post = await createPost();
+    await env.DB.prepare("UPDATE post_targets SET status = 'published' WHERE post_id = ?").bind(post.id).run();
+    const sent: unknown[] = [];
+    const queue = { sendBatch: async (msgs: unknown[]) => void sent.push(...msgs) };
+    expect((await api(`/posts/${post.id}/publish-now`, { method: "POST" }, { PUBLISH_QUEUE: queue as unknown as Queue })).status).toBe(200);
+    expect(sent).toEqual([]);
   });
 });

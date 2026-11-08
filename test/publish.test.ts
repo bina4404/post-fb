@@ -39,7 +39,7 @@ afterEach(() => vi.restoreAllMocks());
 describe("success", () => {
   it("posts a photo from Google Drive to the Page and stores post_id", async () => {
     await seedDrive();
-    const [id] = await duePost({ facebookAccountId: 1, link: "https://shop.test", imageKey: "drive-file-123" });
+    const [id] = await duePost({ facebookAccountIds: [1], link: "https://shop.test", imageKey: "drive-file-123" });
     const calls = mockFetch({
       [`GET ${DRIVE}/files/drive-file-123`]: () => new Response(PNG, { headers: { "content-type": "image/png" } }),
       [`POST ${GRAPH}/page1/photos`]: () => Response.json({ id: "photo1", post_id: "page1_post1" }),
@@ -56,7 +56,7 @@ describe("success", () => {
 
   it("a Google Drive auth error fails the post without flagging the Facebook account", async () => {
     await seedDrive(0); // access token hết hạn, refresh bị Google từ chối
-    const [id] = await duePost({ facebookAccountId: 1, imageKey: "drive-file-123" });
+    const [id] = await duePost({ facebookAccountIds: [1], imageKey: "drive-file-123" });
     mockFetch({ "POST https://oauth2.googleapis.com/token": () => Response.json({ error: "invalid_grant", error_description: "Token has been expired or revoked." }, { status: 400 }) });
     expect(await publishTarget(env, id!)).toBe("failed");
     expect(await target(id!)).toMatchObject({ status: "failed", last_error: "Google Drive cần kết nối lại" });
@@ -65,14 +65,14 @@ describe("success", () => {
   });
 
   it("posts a link without image to /feed", async () => {
-    const [id] = await duePost({ facebookAccountId: 1, link: "https://shop.test" });
+    const [id] = await duePost({ facebookAccountIds: [1], link: "https://shop.test" });
     const calls = mockFetch({ [`POST ${GRAPH}/page1/feed`]: () => Response.json({ id: "page1_feed1" }) });
     expect(await publishTarget(env, id!)).toBe("published");
     expect(Object.fromEntries(await calls[0]!.formData())).toEqual({ message: "Hello", link: "https://shop.test", access_token: "PAGE-TOKEN" });
   });
 
   it("downloads an image_url (from CSV) and posts it as a photo", async () => {
-    const [id] = await duePost({ facebookAccountId: 1, imageUrl: "https://img.test/a.png" });
+    const [id] = await duePost({ facebookAccountIds: [1], imageUrl: "https://img.test/a.png" });
     const calls = mockFetch({
       "GET https://img.test/a.png": () => new Response(PNG, { headers: { "content-type": "image/png" } }),
       [`POST ${GRAPH}/page1/photos`]: () => Response.json({ id: "photo2", post_id: "page1_post2" }),
@@ -86,7 +86,7 @@ describe("success", () => {
 
 describe("transient errors", () => {
   it("retries 3 times with 2/4/8 min backoff, then fails", async () => {
-    const [id] = await duePost({ facebookAccountId: 1 });
+    const [id] = await duePost({ facebookAccountIds: [1] });
     const calls = mockFetch({ [`POST ${GRAPH}/page1/feed`]: () => Response.json({ error: { message: "Service down", code: 2 } }, { status: 500 }) });
     let now = Date.now();
     for (const minutes of [2, 4, 8]) {
@@ -101,7 +101,7 @@ describe("transient errors", () => {
   });
 
   it("treats a network timeout as transient", async () => {
-    const [id] = await duePost({ facebookAccountId: 1 });
+    const [id] = await duePost({ facebookAccountIds: [1] });
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new DOMException("timed out", "TimeoutError"));
     expect(await publishTarget(env, id!)).toBe("retry");
   });
@@ -109,7 +109,7 @@ describe("transient errors", () => {
 
 describe("permanent errors", () => {
   it("stops on a permission error and flags the target", async () => {
-    const [id] = await duePost({ facebookAccountId: 1 });
+    const [id] = await duePost({ facebookAccountIds: [1] });
     mockFetch({ [`POST ${GRAPH}/page1/feed`]: () => Response.json({ error: { message: "(#200) Requires pages_manage_posts", code: 200 } }, { status: 403 }) });
     expect(await publishTarget(env, id!)).toBe("failed");
     expect(await target(id!)).toMatchObject({ status: "failed", attempts: 1, needs_attention: 1, last_error: "(#200) Requires pages_manage_posts" });
@@ -117,8 +117,8 @@ describe("permanent errors", () => {
   });
 
   it("on an expired token fails the target, marks the account and holds its other posts", async () => {
-    const [first] = await duePost({ facebookAccountId: 1 });
-    const [second] = await duePost({ facebookAccountId: 1 });
+    const [first] = await duePost({ facebookAccountIds: [1] });
+    const [second] = await duePost({ facebookAccountIds: [1] });
     mockFetch({ [`POST ${GRAPH}/page1/feed`]: () => Response.json({ error: { message: "Session has expired", code: 190 } }, { status: 400 }) });
     expect(await publishTarget(env, first!)).toBe("failed");
     expect(await accountStatus(1)).toBe("needs_reauth");
@@ -132,7 +132,7 @@ describe("permanent errors", () => {
 
 describe("idempotency", () => {
   it("publishes once even when cron runs twice and messages are duplicated", async () => {
-    const [id] = await duePost({ facebookAccountId: 1 });
+    const [id] = await duePost({ facebookAccountIds: [1] });
     const { env: cronEnv, sent } = fakeQueueEnv();
     await runCron(cronEnv);
     await runCron(cronEnv);
@@ -145,7 +145,7 @@ describe("idempotency", () => {
   });
 
   it("never re-publishes a target stuck in publishing; flags it after 20 minutes", async () => {
-    const [id] = await duePost({ facebookAccountId: 1 });
+    const [id] = await duePost({ facebookAccountIds: [1] });
     const now = Date.now();
     await env.DB.prepare("UPDATE post_targets SET status = 'publishing', locked_at = ? WHERE id = ?").bind(now - STUCK_AFTER_MS + 60_000, id).run();
     const { env: cronEnv, sent } = fakeQueueEnv();
@@ -158,9 +158,9 @@ describe("idempotency", () => {
   });
 
   it("does not enqueue future, draft or disabled-account targets", async () => {
-    const [due] = await duePost({ facebookAccountId: 1 });
-    const [otherPage] = await duePost({ facebookAccountId: 2 });
-    await api("/posts", { method: "POST", json: { caption: "draft", facebookAccountId: 1 } });
+    const [due] = await duePost({ facebookAccountIds: [1] });
+    const [otherPage] = await duePost({ facebookAccountIds: [2] });
+    await api("/posts", { method: "POST", json: { caption: "draft", facebookAccountIds: [1] } });
     await env.DB.prepare("UPDATE accounts SET enabled = 0 WHERE id = 2").run();
     const { env: cronEnv, sent } = fakeQueueEnv();
     await runCron(cronEnv);
@@ -171,7 +171,7 @@ describe("idempotency", () => {
 });
 
 it("queue consumer acks every message, even when publishing crashes", async () => {
-  const [id] = await duePost({ facebookAccountId: 1 });
+  const [id] = await duePost({ facebookAccountIds: [1] });
   mockFetch({ [`POST ${GRAPH}/page1/feed`]: () => Response.json({ id: "x" }) });
   const ack = vi.fn();
   const msg = (targetId: number) => ({ body: { targetId }, ack, retry: vi.fn() });

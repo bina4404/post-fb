@@ -1,8 +1,8 @@
-import { sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import { getDb, type Db } from "../db/client";
-import { scheduleSlots } from "../db/schema";
+import { postTargets, scheduleSlots } from "../db/schema";
 import type { AppEnv } from "../env";
 import { fail, idParam, readJson } from "../lib/http";
 import { setSchedule } from "../lib/schedule";
@@ -45,6 +45,24 @@ scheduleRoutes.post("/:id/schedule", async (c) => {
     at = parsed;
   }
   await setSchedule(db, id, at, now);
+  return c.json(await loadPost(db, id));
+});
+
+/**
+ * "Đăng ngay": đặt lịch là bây giờ rồi đẩy thẳng các target vào queue, không chờ cron.
+ * Cron có đẩy trùng thì consumer vẫn chỉ đăng một lần (giành target nguyên tử).
+ */
+scheduleRoutes.post("/:id/publish-now", async (c) => {
+  const db = getDb(c.env);
+  const id = idParam(c);
+  const now = Date.now();
+  await loadPost(db, id);
+  await setSchedule(db, id, now, now);
+  const due = await db
+    .select({ id: postTargets.id })
+    .from(postTargets)
+    .where(and(eq(postTargets.postId, id), eq(postTargets.status, "scheduled")));
+  if (due.length) await c.env.PUBLISH_QUEUE.sendBatch(due.map((t) => ({ body: { targetId: t.id } })));
   return c.json(await loadPost(db, id));
 });
 

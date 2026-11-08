@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "wrangler dev --local-upstream localhost",
     "dev:web": "vite",
     "build": "vite build",
     "typecheck": "wrangler types && tsc --noEmit && tsc --noEmit -p tsconfig.web.json",

@@ -3,7 +3,7 @@ import { getDb } from "../db/client";
 import type { AppEnv } from "../env";
 import { driveAccessToken } from "../lib/accounts";
 import { fail } from "../lib/http";
-import { downloadFile, driveFileId, uploadFile } from "../platforms/drive";
+import { downloadFile, driveFileId, ensureFolder, listImages, uploadFile } from "../platforms/drive";
 import { PublishFailure } from "../platforms/errors";
 
 // Giới hạn ảnh của Facebook /photos: PNG tối đa 1MB, JPEG tối đa 4MB.
@@ -32,9 +32,19 @@ mediaRoutes.post("/", async (c) => {
   const key = await viaDrive(async () => {
     const token = await driveAccessToken(getDb(c.env), c.env, Date.now());
     const ext = file.type === "image/png" ? "png" : "jpg";
-    return uploadFile(token, `post-fb-${crypto.randomUUID()}.${ext}`, { bytes, contentType: file.type });
+    const name = `${file.name.replace(/[.][^.]*$/, "") || "image"}-${crypto.randomUUID().slice(0, 8)}.${ext}`;
+    return uploadFile(token, await ensureFolder(token), name, { bytes, contentType: file.type });
   });
   return c.json({ key }, 201);
+});
+
+// Ảnh trong thư mục post-fb trên Google Drive, để chọn lại cho bài mới.
+mediaRoutes.get("/", async (c) => {
+  const images = await viaDrive(async () => {
+    const token = await driveAccessToken(getDb(c.env), c.env, Date.now());
+    return listImages(token, await ensureFolder(token));
+  });
+  return c.json(images);
 });
 
 // Xem trước ảnh trong UI: Worker đọc từ Drive rồi trả lại, file trên Drive không cần chia sẻ công khai.

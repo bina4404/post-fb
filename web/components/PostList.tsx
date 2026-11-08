@@ -46,6 +46,14 @@ function PostRow({ post, dest, onEdit, onChanged }: { post: Post } & Omit<Props,
         <Button disabled={!when} onClick={() => run(`/posts/${post.id}/schedule`, { method: "POST", json: { scheduledAt: when } })}>Đặt giờ</Button>
         <Button onClick={() => run(`/posts/${post.id}/schedule`, { method: "POST", json: { queue: true } })}>Xếp vào khung giờ</Button>
         {post.scheduledAt && <Button onClick={() => run(`/posts/${post.id}/unschedule`, { method: "POST" })}>Huỷ lịch</Button>}
+        {post.targets.some((t) => t.status !== "published" && t.status !== "publishing") && (
+          <Button
+            variant="success"
+            onClick={() => confirm(`Đăng ngay bài này lên ${post.targets.length} Page?`) && run(`/posts/${post.id}/publish-now`, { method: "POST" })}
+          >
+            Đăng ngay
+          </Button>
+        )}
         {!locked && <Button onClick={() => onEdit(post)}>Sửa</Button>}
         {!locked && (
           <Button className="text-red-700" onClick={() => confirm("Xoá bài này?") && run(`/posts/${post.id}`, { method: "DELETE" })}>Xoá</Button>

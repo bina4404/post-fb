@@ -7,16 +7,14 @@ import type { AppEnv } from "../env";
 import { fail, idParam, readJson } from "../lib/http";
 import { contentError, insertPost, loadDestinations, targetRows, type TargetInput } from "../lib/posts";
 import { parseScheduleTime } from "../lib/time";
-import { deleteFile, driveFileId } from "../platforms/drive";
-import { driveAccessToken } from "../lib/accounts";
-import { log } from "../lib/log";
+import { driveFileId } from "../platforms/drive";
 
 const postBody = z.object({
   caption: z.string().trim().min(1),
   link: z.url({ protocol: /^https?$/ }).nullish(),
   imageKey: driveFileId.nullish(),
   imageUrl: z.url({ protocol: /^https$/ }).nullish(),
-  facebookAccountId: z.int().positive(),
+  facebookAccountIds: z.array(z.int().positive()).min(1, "chọn ít nhất 1 Page Facebook").max(50),
   scheduledAt: z.string().nullish(),
 });
 const contentBody = postBody.omit({ scheduledAt: true });
@@ -24,8 +22,10 @@ type PostBody = z.infer<typeof postBody>;
 
 async function toInput(db: Db, body: PostBody, now: number) {
   const dest = await loadDestinations(db);
-  if (!dest.pages.some((p) => p.id === body.facebookAccountId)) throw fail(400, "Page Facebook không có hoặc chưa bật");
-  const targets: TargetInput[] = [{ platform: "facebook", accountId: body.facebookAccountId }];
+  const pageIds = [...new Set(body.facebookAccountIds)];
+  if (!pageIds.every((id) => dest.pages.some((p) => p.id === id))) throw fail(400, "có Page Facebook không tồn tại hoặc chưa bật");
+  // Mỗi Page là một target riêng: cùng nội dung, đăng và theo dõi trạng thái độc lập trên từng Page.
+  const targets: TargetInput[] = pageIds.map((accountId) => ({ platform: "facebook", accountId }));
   const scheduledAt = body.scheduledAt ? parseScheduleTime(body.scheduledAt) : null;
   if (body.scheduledAt && (scheduledAt === null || scheduledAt <= now)) {
     throw fail(400, "scheduledAt phải là thời điểm hợp lệ trong tương lai");
@@ -54,15 +54,6 @@ export async function loadPost(db: Db, id: number) {
 function assertEditable(post: Awaited<ReturnType<typeof loadPost>>) {
   if (post.targets.some((t) => t.status === "publishing" || t.status === "published")) {
     throw fail(409, "bài đã hoặc đang được đăng, không sửa/xoá được");
-  }
-}
-
-/** Xoá ảnh trên Drive sau khi bài đã đổi/xoá. Lỗi chỉ ghi log: bài đã được lưu, ảnh thừa không làm mất dữ liệu. */
-async function deleteImage(env: AppEnv["Bindings"], db: Db, fileId: string) {
-  try {
-    await deleteFile(await driveAccessToken(db, env, Date.now()), fileId);
-  } catch (err) {
-    log("warn", "drive_delete_failed", { fileId, message: (err as Error).message });
   }
 }
 
@@ -101,7 +92,6 @@ postRoutes.patch("/:id", async (c) => {
     db.delete(postTargets).where(eq(postTargets.postId, id)),
     db.insert(postTargets).values(targetRows(id, input.targets, post.scheduledAt, now)),
   ]);
-  if (post.imageKey && post.imageKey !== imageKey) await deleteImage(c.env, db, post.imageKey);
   return c.json(await loadPost(db, id));
 });
 
@@ -109,7 +99,7 @@ postRoutes.delete("/:id", async (c) => {
   const db = getDb(c.env);
   const post = await loadPost(db, idParam(c));
   assertEditable(post);
+  // Ảnh giữ lại trong thư mục post-fb trên Drive để dùng cho bài khác.
   await db.delete(posts).where(eq(posts.id, post.id));
-  if (post.imageKey) await deleteImage(c.env, db, post.imageKey);
   return c.body(null, 204);
 });

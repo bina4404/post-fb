@@ -39,7 +39,7 @@ Làm theo thứ tự. Mọi lệnh có `--remote`, `wrangler deploy` hay `wrangl
   - `https://tools.new2h.com/api/oauth/google/callback`
   - `http://localhost:8787/api/oauth/google/callback` (để chạy local)
 - [ ] Ghi lại Client ID và Client secret.
-- [ ] Sau deploy: tab **Tài khoản → Kết nối Google Drive**. Chưa kết nối thì upload ảnh báo lỗi. Ảnh nằm ở thư mục gốc "My Drive" với tên `post-fb-<uuid>.png/jpg`; app chỉ thấy file do chính nó tạo.
+- [ ] Sau deploy: tab **Tài khoản → Kết nối Google Drive**. Chưa kết nối thì upload ảnh báo lỗi. Ảnh nằm trong thư mục **`post-fb`** ở My Drive (app tự tạo ở lần upload đầu). App chỉ thấy file do chính nó tạo (scope `drive.file`): ảnh bạn tự kéo vào thư mục đó trên Drive sẽ **không** hiện trong "Chọn từ Google Drive", hãy upload qua app.
 
 ## 5. Secrets
 

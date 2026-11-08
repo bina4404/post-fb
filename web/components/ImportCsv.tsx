@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { api, ApiError } from "../api";
-import { Button, ErrorText } from "./ui";
+import { Button, ErrorText, FileButton } from "./ui";
 
 type LineError = { line: number; message: string };
 
@@ -31,8 +31,10 @@ export function ImportCsv({ onImported }: { onImported: () => void }) {
         Cột: <code>caption,link,image_url,scheduled_at</code>. Bài đăng lên Page Facebook duy nhất đang bật. <code>scheduled_at</code>{" "}
         theo ISO 8601, không có offset thì hiểu là giờ Bangkok, để trống = nháp. Có một dòng lỗi thì không dòng nào được import.
       </p>
-      <input type="file" accept=".csv,text/csv" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-      <Button disabled={!file} onClick={upload}>Import</Button>
+      <div className="flex flex-wrap items-center gap-2">
+        <FileButton label="Chọn file CSV" accept=".csv,text/csv" file={file} onChange={setFile} />
+        <Button variant="primary" disabled={!file} onClick={upload}>Import</Button>
+      </div>
       {done !== null && <p className="text-sm text-green-700">Đã import {done} bài.</p>}
       <ErrorText error={error} />
       {errors.length > 0 && (

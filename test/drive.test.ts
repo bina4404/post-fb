@@ -18,28 +18,58 @@ beforeEach(seed);
 afterEach(() => vi.restoreAllMocks());
 
 describe("media on Google Drive", () => {
-  it("uploads with multipart/related and serves the file back through the Worker", async () => {
-    await seedDrive();
-    const calls = mockFetch({
+  /** Drive giả: thư mục post-fb chưa có ở lần đầu, được tạo rồi dùng lại. */
+  function driveMock(listed: { id: string; name: string; thumbnailLink?: string }[] = []) {
+    let folder: string | null = null;
+    return mockFetch({
+      [`GET ${DRIVE}/files`]: (req) => {
+        const q = new URL(req.url).searchParams.get("q") ?? "";
+        if (q.includes("mimeType = 'application/vnd.google-apps.folder'")) return Response.json({ files: folder ? [{ id: folder }] : [] });
+        return Response.json({ files: listed });
+      },
+      [`POST ${DRIVE}/files`]: () => ((folder = "folder-1"), Response.json({ id: folder })),
       [`POST ${DRIVE_UPLOAD}`]: () => Response.json({ id: "drive-file-123" }),
       [`GET ${DRIVE}/files/drive-file-123`]: () => new Response(PNG, { headers: { "content-type": "image/png" } }),
     });
+  }
+
+  it("uploads into the post-fb folder (created once) and serves the file back", async () => {
+    await seedDrive();
+    const calls = driveMock();
     const res = await api("/media", { method: "POST", body: pngForm() });
     expect(res.status).toBe(201);
     expect(await res.json()).toEqual({ key: "drive-file-123" });
 
-    const upload = calls[0]!;
+    const create = calls.find((r) => r.method === "POST" && !r.url.includes("/upload/"))!;
+    expect(await create.json()).toEqual({ name: "post-fb", mimeType: "application/vnd.google-apps.folder" });
+    const upload = calls.find((r) => r.url.includes("/upload/"))!;
     expect(new URL(upload.url).searchParams.get("uploadType")).toBe("multipart");
     expect(upload.headers.get("authorization")).toBe("Bearer ya29.ACCESS");
-    expect(upload.headers.get("content-type")).toMatch(/^multipart\/related; boundary=/);
-    const body = new Uint8Array(await upload.arrayBuffer());
-    const text = new TextDecoder().decode(body);
-    expect(text).toMatch(/"name":"post-fb-[0-9a-f-]+\.png"/);
+    expect(upload.headers.get("content-type")).toMatch(/^multipart[/]related; boundary=/);
+    const text = new TextDecoder().decode(new Uint8Array(await upload.arrayBuffer()));
+    expect(text).toContain('"parents":["folder-1"]');
+    expect(text).toMatch(/"name":"a-[0-9a-f]{8}[.]png"/);
     expect(text).toContain("Content-Type: image/png");
+
+    calls.length = 0;
+    expect((await api("/media", { method: "POST", body: pngForm() })).status).toBe(201);
+    expect(calls.filter((r) => r.method === "POST" && !r.url.includes("/upload/"))).toHaveLength(0); // thư mục được dùng lại
 
     const get = await api("/media/drive-file-123");
     expect(get.headers.get("content-type")).toBe("image/png");
     expect(new Uint8Array(await get.arrayBuffer())).toEqual(PNG);
+  });
+
+  it("lists images in the post-fb folder, newest first", async () => {
+    await seedDrive();
+    const images = [{ id: "img-2-xxxxxxxx", name: "b.png", thumbnailLink: "https://lh3.test/b" }, { id: "img-1-xxxxxxxx", name: "a.jpg" }];
+    const calls = driveMock(images);
+    await api("/media", { method: "POST", body: pngForm() }); // tạo thư mục
+    const res = await api("/media");
+    expect(await res.json()).toEqual(images);
+    const list = new URL(calls.at(-1)!.url).searchParams;
+    expect(list.get("q")).toBe("'folder-1' in parents and trashed = false and mimeType contains 'image/'");
+    expect(list.get("orderBy")).toBe("createdTime desc");
   });
 
   it("asks to connect Google Drive when no account is connected", async () => {
@@ -47,6 +77,7 @@ describe("media on Google Drive", () => {
     const res = await api("/media", { method: "POST", body: pngForm() });
     expect(res.status).toBe(400);
     expect(((await res.json()) as { error: string }).error).toContain("chưa kết nối Google Drive");
+    expect((await api("/media")).status).toBe(400);
   });
 
   it("still validates type and size before calling Drive", async () => {
@@ -61,17 +92,12 @@ describe("media on Google Drive", () => {
     expect((await api("/media/..%2Fetc")).status).toBe(404);
   });
 
-  it("deletes the Drive file with the post, and a Drive failure does not block deletion", async () => {
+  it("keeps the Drive image when the post is deleted, so it can be reused", async () => {
     await seedDrive();
-    const calls = mockFetch({ [`DELETE ${DRIVE}/files/drive-file-123`]: () => new Response(null, { status: 204 }) });
-    const post = (await (await api("/posts", { method: "POST", json: { caption: "x", facebookAccountId: 1, imageKey: "drive-file-123" } })).json()) as { id: number };
+    const calls = mockFetch({});
+    const post = (await (await api("/posts", { method: "POST", json: { caption: "x", facebookAccountIds: [1], imageKey: "drive-file-123" } })).json()) as { id: number };
     expect((await api(`/posts/${post.id}`, { method: "DELETE" })).status).toBe(204);
-    expect(calls.map((r) => r.method)).toEqual(["DELETE"]);
-
-    vi.restoreAllMocks();
-    mockFetch({ [`DELETE ${DRIVE}/files/drive-file-456`]: () => Response.json({ error: { message: "boom" } }, { status: 500 }) });
-    const other = (await (await api("/posts", { method: "POST", json: { caption: "x", facebookAccountId: 1, imageKey: "drive-file-456" } })).json()) as { id: number };
-    expect((await api(`/posts/${other.id}`, { method: "DELETE" })).status).toBe(204);
+    expect(calls).toHaveLength(0);
     expect(await count("posts")).toBe(0);
   });
 });

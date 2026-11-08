@@ -2,6 +2,8 @@
 
 Web app đăng bài theo lịch lên Facebook Page và Pinterest Board. Một Worker duy nhất (Hono API + React SPA qua Static Assets), D1 + Google Drive (ảnh) + Cron + Queues, đăng nhập bằng Cloudflare Access.
 
+> **Thay đổi 08/11/2026 – lần 2:** (1) ảnh upload vào thư mục **`post-fb`** trên Google Drive (app tự tạo thư mục; scope `drive.file` chỉ thấy file/thư mục do app tạo); (2) một bài có thể đăng lên **nhiều Page** (`facebookAccountIds`, mỗi Page một target riêng); (3) chọn lại ảnh có sẵn trong thư mục `post-fb` (`GET /api/media`); (4) **Đăng ngay** (`POST /api/posts/:id/publish-now`: đặt lịch = bây giờ và đẩy thẳng vào queue). Xoá/sửa bài **không còn xoá ảnh trên Drive** vì ảnh là thư viện dùng lại.
+>
 > **Thay đổi 08/11/2026 (bạn yêu cầu):** **bỏ Pinterest**, app chỉ lên lịch và đăng lên Facebook Page; chạy trên **`https://tools.new2h.com`** (custom domain, tắt `*.workers.dev`). Bảng `boards` và cột `post_targets.board_id` vẫn còn trong D1 nhưng không dùng nữa, để không phải chạy migration xoá dữ liệu. CSV giờ có cột `caption,link,image_url,scheduled_at` (cột thừa của file cũ được bỏ qua). Các mục nói về Pinterest bên dưới chỉ còn giá trị lịch sử.
 >
 > **Thay đổi sau Giai đoạn 6 (bạn yêu cầu):** ảnh upload lưu trên **Google Drive** của tài khoản Gmail cá nhân (OAuth, scope `drive.file`) thay cho R2. Hosting giữ nguyên một Worker. Cột `image_key` giờ chứa id file Drive, nên D1 không đổi schema.

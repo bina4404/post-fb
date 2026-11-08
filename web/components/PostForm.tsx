@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { api, type Destinations, type Post } from "../api";
+import { ImagePicker, type ImageChoice } from "./ImagePicker";
 import { Button, ErrorText, Field, inputClass } from "./ui";
 
 type Props = { post?: Post; dest: Destinations; onSaved: () => void; onCancel: () => void };
@@ -10,33 +11,55 @@ async function uploadImage(file: File): Promise<string> {
   return (await api<{ key: string }>("/media", { method: "POST", body: form })).key;
 }
 
+function PagePicker({ pages, selected, onChange }: { pages: { id: number; name: string }[]; selected: number[]; onChange: (ids: number[]) => void }) {
+  const toggle = (id: number, on: boolean) => onChange(on ? [...selected, id] : selected.filter((x) => x !== id));
+  if (pages.length === 0) return <p className="text-sm text-amber-700">Chưa có Page nào được kết nối và bật (tab Tài khoản).</p>;
+  return (
+    <fieldset className="text-sm">
+      <legend className="mb-1 font-medium">Đăng lên Page Facebook (chọn một hoặc nhiều)</legend>
+      <div className="mb-1 flex gap-3 text-xs">
+        <button type="button" className="text-blue-700 underline" onClick={() => onChange(pages.map((p) => p.id))}>Chọn tất cả</button>
+        <button type="button" className="text-blue-700 underline" onClick={() => onChange([])}>Bỏ chọn</button>
+      </div>
+      <div className="grid gap-1 sm:grid-cols-2">
+        {pages.map((p) => (
+          <label key={p.id} className="flex items-center gap-2 rounded border px-2 py-1">
+            <input type="checkbox" checked={selected.includes(p.id)} onChange={(e) => toggle(p.id, e.target.checked)} />
+            {p.name}
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
 export function PostForm({ post, dest, onSaved, onCancel }: Props) {
   const pages = dest.accounts.filter((a) => a.platform === "facebook" && a.enabled);
-  const fbTarget = post?.targets.find((t) => t.platform === "facebook");
   const [caption, setCaption] = useState(post?.caption ?? "");
   const [link, setLink] = useState(post?.link ?? "");
-  const [imageUrl, setImageUrl] = useState(post?.imageUrl ?? "");
-  const [file, setFile] = useState<File | null>(null);
-  const [pageId, setPageId] = useState(fbTarget ? String(fbTarget.accountId) : "");
+  const [image, setImage] = useState<ImageChoice>({ file: null, imageKey: post?.imageKey ?? null, imageUrl: post?.imageUrl ?? "" });
+  const [pageIds, setPageIds] = useState<number[]>(post?.targets.map((t) => t.accountId) ?? []);
   const [scheduledAt, setScheduledAt] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  async function submit(e: FormEvent) {
-    e.preventDefault();
+  async function save(publishNow: boolean) {
+    if (pageIds.length === 0) return setError("Chọn ít nhất 1 Page Facebook");
+    if (publishNow && !confirm(`Đăng ngay bài này lên ${pageIds.length} Page?`)) return;
     setBusy(true);
     setError(null);
     try {
-      const imageKey = file ? await uploadImage(file) : imageUrl ? null : (post?.imageKey ?? null);
+      const imageKey = image.file ? await uploadImage(image.file) : image.imageKey;
       const body = {
         caption,
         link: link || null,
         imageKey,
-        imageUrl: imageKey ? null : imageUrl || null,
-        facebookAccountId: pageId ? Number(pageId) : null,
-        ...(post ? {} : { scheduledAt: scheduledAt || null }),
+        imageUrl: imageKey ? null : image.imageUrl || null,
+        facebookAccountIds: pageIds,
+        ...(post || publishNow ? {} : { scheduledAt: scheduledAt || null }),
       };
-      await api(post ? `/posts/${post.id}` : "/posts", { method: post ? "PATCH" : "POST", json: body });
+      const saved = await api<Post>(post ? `/posts/${post.id}` : "/posts", { method: post ? "PATCH" : "POST", json: body });
+      if (publishNow) await api(`/posts/${saved.id}/publish-now`, { method: "POST" });
       onSaved();
     } catch (err) {
       setError((err as Error).message);
@@ -45,36 +68,27 @@ export function PostForm({ post, dest, onSaved, onCancel }: Props) {
     }
   }
 
+  const submit = (e: FormEvent) => (e.preventDefault(), void save(false));
   return (
-    <form onSubmit={submit} className="space-y-3 rounded border bg-white p-4">
+    <form onSubmit={submit} className="space-y-4 rounded border bg-white p-4">
       <Field label="Caption">
         <textarea className={inputClass} rows={4} value={caption} onChange={(e) => setCaption(e.target.value)} required />
       </Field>
       <Field label="Link">
         <input className={inputClass} type="url" value={link} onChange={(e) => setLink(e.target.value)} />
       </Field>
-      <Field label={post?.imageKey && !file ? "Ảnh (đang có ảnh đã tải lên, chọn file để thay)" : "Ảnh (JPEG ≤4MB, PNG ≤1MB, lưu vào Google Drive)"}>
-        <input type="file" accept="image/jpeg,image/png" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-      </Field>
-      <Field label="…hoặc URL ảnh (https)">
-        <input className={inputClass} type="url" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} disabled={!!file} />
-      </Field>
-      <Field label="Page Facebook">
-        <select className={inputClass} value={pageId} onChange={(e) => setPageId(e.target.value)} required>
-          <option value="">— chọn Page —</option>
-          {pages.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
-      </Field>
-      {pages.length === 0 && <p className="text-sm text-amber-700">Chưa có Page nào được kết nối và bật (tab Tài khoản).</p>}
+      <ImagePicker value={image} onChange={setImage} />
+      <PagePicker pages={pages} selected={pageIds} onChange={setPageIds} />
       {!post && (
         <Field label="Giờ đăng (giờ Bangkok, để trống = nháp)">
           <input className={inputClass} type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} />
         </Field>
       )}
       <ErrorText error={error} />
-      <div className="flex gap-2">
-        <Button type="submit" disabled={busy} className="bg-blue-600 text-white hover:bg-blue-700">{post ? "Lưu" : "Tạo bài"}</Button>
-        <Button type="button" onClick={onCancel}>Huỷ</Button>
+      <div className="flex flex-wrap gap-2 border-t pt-3">
+        <Button type="submit" variant="primary" disabled={busy}>{post ? "Lưu thay đổi" : scheduledAt ? "Tạo & lên lịch" : "Lưu nháp"}</Button>
+        <Button type="button" variant="success" disabled={busy} onClick={() => void save(true)}>{post ? "Lưu & đăng ngay" : "Đăng ngay"}</Button>
+        <Button type="button" disabled={busy} onClick={onCancel}>Huỷ</Button>
       </div>
     </form>
   );

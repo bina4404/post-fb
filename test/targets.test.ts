@@ -18,9 +18,9 @@ beforeEach(seed);
 
 describe("GET /api/targets", () => {
   it("lists one row per target with the Page name, filterable by status and time", async () => {
-    const [soon] = await createPost({ facebookAccountId: 1, scheduledAt: inHours(2) });
-    const [failed] = await createPost({ facebookAccountId: 1, scheduledAt: inHours(3) });
-    const [later] = await createPost({ facebookAccountId: 1, scheduledAt: inHours(48) });
+    const [soon] = await createPost({ facebookAccountIds: [1], scheduledAt: inHours(2) });
+    const [failed] = await createPost({ facebookAccountIds: [1], scheduledAt: inHours(3) });
+    const [later] = await createPost({ facebookAccountIds: [1], scheduledAt: inHours(48) });
     await setTarget(failed!, "status = 'failed'");
 
     expect((await list()).map((r) => [r.id, r.platform, r.destination])).toEqual([
@@ -41,7 +41,7 @@ describe("GET /api/targets", () => {
 
 describe("POST /api/targets/:id/retry", () => {
   it("puts a failed target back in the queue and cron sends it on the next run", async () => {
-    const [id] = await createPost({ facebookAccountId: 1, scheduledAt: inHours(1) });
+    const [id] = await createPost({ facebookAccountIds: [1], scheduledAt: inHours(1) });
     await setTarget(id!, "status = 'failed', attempts = 4, needs_attention = 1, last_error = 'boom'");
     await env.DB.prepare("UPDATE accounts SET access_token_enc = ? WHERE id = 1").bind(await encryptToken("t", env.TOKEN_ENC_KEY)).run();
 
@@ -55,9 +55,9 @@ describe("POST /api/targets/:id/retry", () => {
   });
 
   it("refuses targets that are not failed or already exist on the platform", async () => {
-    const [scheduled] = await createPost({ facebookAccountId: 1, scheduledAt: inHours(1) });
+    const [scheduled] = await createPost({ facebookAccountIds: [1], scheduledAt: inHours(1) });
     expect((await api(`/targets/${scheduled}/retry`, { method: "POST" })).status).toBe(409);
-    const [published] = await createPost({ facebookAccountId: 1 });
+    const [published] = await createPost({ facebookAccountIds: [1] });
     await setTarget(published!, "status = 'failed', external_post_id = 'page1_123'");
     expect((await api(`/targets/${published}/retry`, { method: "POST" })).status).toBe(409);
   });

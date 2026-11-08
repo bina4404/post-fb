@@ -1,12 +1,28 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import type { TargetStatus } from "../api";
 
-export function Button({ className = "", ...props }: ButtonHTMLAttributes<HTMLButtonElement>) {
+const BUTTON = "rounded px-3 py-1.5 text-sm font-medium disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-blue-600";
+const VARIANTS = {
+  default: "border border-gray-300 bg-white text-gray-800 hover:bg-gray-100",
+  primary: "bg-blue-600 text-white hover:bg-blue-700",
+  success: "bg-green-600 text-white hover:bg-green-700",
+};
+type Variant = keyof typeof VARIANTS;
+
+export function Button({ className = "", variant = "default", ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant }) {
+  return <button className={`${BUTTON} ${VARIANTS[variant]} ${className}`} {...props} />;
+}
+
+/** Nút chọn file thay cho ô "Choose File" mặc định của trình duyệt; hiện tên file đã chọn. */
+export function FileButton({ label, accept, file, onChange }: { label: string; accept: string; file: File | null; onChange: (f: File | null) => void }) {
   return (
-    <button
-      className={`rounded border border-gray-300 bg-white px-3 py-1 text-sm hover:bg-gray-100 disabled:opacity-50 ${className}`}
-      {...props}
-    />
+    <span className="flex flex-wrap items-center gap-2">
+      <label className={`${BUTTON} ${VARIANTS.default} cursor-pointer focus-within:outline-2 focus-within:outline-blue-600`}>
+        {label}
+        <input type="file" accept={accept} className="sr-only" onChange={(e) => onChange(e.target.files?.[0] ?? null)} />
+      </label>
+      <span className="text-sm text-gray-600">{file ? file.name : "Chưa chọn file"}</span>
+    </span>
   );
 }
 
