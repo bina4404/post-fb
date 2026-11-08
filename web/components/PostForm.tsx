@@ -45,9 +45,10 @@ export function PostForm({ post, dest, onSaved, onCancel }: Props) {
   const [busy, setBusy] = useState(false);
   const tz = useTz();
 
-  async function save(publishNow: boolean) {
+  /** save: lưu (nháp hoặc theo giờ đã nhập). now: lưu rồi đăng ngay. queue: lưu rồi xếp vào khung giờ trống sớm nhất. */
+  async function save(mode: "save" | "now" | "queue") {
     if (pageIds.length === 0) return setError("Chọn ít nhất 1 Page Facebook");
-    if (publishNow && !confirm(`Đăng ngay bài này lên ${pageIds.length} Page?`)) return;
+    if (mode === "now" && !confirm(`Đăng ngay bài này lên ${pageIds.length} Page?`)) return;
     setBusy(true);
     setError(null);
     try {
@@ -58,10 +59,16 @@ export function PostForm({ post, dest, onSaved, onCancel }: Props) {
         imageKey,
         imageUrl: imageKey ? null : image.imageUrl || null,
         facebookAccountIds: pageIds,
-        ...(post || publishNow ? {} : { scheduledAt: scheduledAt ? (localInputToIso(scheduledAt, tz) ?? scheduledAt) : null }),
+        ...(post || mode !== "save" ? {} : { scheduledAt: scheduledAt ? (localInputToIso(scheduledAt, tz) ?? scheduledAt) : null }),
       };
       const saved = await api<Post>(post ? `/posts/${post.id}` : "/posts", { method: post ? "PATCH" : "POST", json: body });
-      if (publishNow) await api(`/posts/${saved.id}/publish-now`, { method: "POST" });
+      try {
+        if (mode === "now") await api(`/posts/${saved.id}/publish-now`, { method: "POST" });
+        if (mode === "queue") await api(`/posts/${saved.id}/schedule`, { method: "POST", json: { queue: true, tz } });
+      } catch (err) {
+        // Bài đã được lưu: báo lỗi rồi đóng form, để bấm lại không tạo bài trùng.
+        alert(`Đã lưu bài, nhưng bước tiếp theo bị lỗi: ${(err as Error).message}`);
+      }
       onSaved();
     } catch (err) {
       setError((err as Error).message);
@@ -70,11 +77,11 @@ export function PostForm({ post, dest, onSaved, onCancel }: Props) {
     }
   }
 
-  const submit = (e: FormEvent) => (e.preventDefault(), void save(false));
+  const submit = (e: FormEvent) => (e.preventDefault(), void save("save"));
   return (
     <form onSubmit={submit} className="space-y-4 rounded border bg-white p-4">
       <Field label="Caption">
-        <textarea className={inputClass} rows={4} value={caption} onChange={(e) => setCaption(e.target.value)} required />
+        <textarea className={`${inputClass} min-h-72 resize-y`} rows={12} value={caption} onChange={(e) => setCaption(e.target.value)} required />
       </Field>
       <Field label="Link">
         <input className={inputClass} type="url" value={link} onChange={(e) => setLink(e.target.value)} />
@@ -89,7 +96,10 @@ export function PostForm({ post, dest, onSaved, onCancel }: Props) {
       <ErrorText error={error} />
       <div className="flex flex-wrap gap-2 border-t pt-3">
         <Button type="submit" variant="primary" disabled={busy}>{post ? "Lưu thay đổi" : scheduledAt ? "Tạo & lên lịch" : "Lưu nháp"}</Button>
-        <Button type="button" variant="success" disabled={busy} onClick={() => void save(true)}>{post ? "Lưu & đăng ngay" : "Đăng ngay"}</Button>
+        <Button type="button" disabled={busy} onClick={() => void save("queue")} title="Xếp vào khung giờ trống sớm nhất (tab Khung giờ)">
+          {post ? "Lưu & xếp vào khung giờ" : "Xếp vào khung giờ"}
+        </Button>
+        <Button type="button" variant="success" disabled={busy} onClick={() => void save("now")}>{post ? "Lưu & đăng ngay" : "Đăng ngay"}</Button>
         <Button type="button" disabled={busy} onClick={onCancel}>Huỷ</Button>
       </div>
     </form>
