@@ -7,6 +7,7 @@ it("first migration creates every table and enforces idempotency keys", async ()
   ).all<{ name: string }>();
   expect(results.map((r) => r.name)).toEqual([
     "accounts",
+    "app_settings",
     "boards",
     "oauth_states",
     "post_targets",

@@ -91,5 +91,5 @@ npx wrangler secret put GOOGLE_CLIENT_SECRET
 - **Bài "Cần xử lý" với lỗi "không rõ kết quả":** kiểm tra trên Page Facebook xem bài đã lên chưa. Chỉ bấm Đăng lại nếu chưa lên.
 - **"Tài khoản cần kết nối lại":** vào tab Tài khoản, kết nối lại. Bài đang chờ sẽ tự đi ở phút cron kế tiếp.
 - **Rollback:** Workers → Deployments → chọn bản trước → *Rollback*, hoặc `npx wrangler rollback`. Migration không tự rollback.
-- **Migration hiện có:** `0000_init` (bảng) và `0001_library_indexes` (chỉ thêm index). Lệnh deploy của Workers Builds tự áp dụng migration mới trước khi deploy.
+- **Migration hiện có:** `0000_init` (bảng), `0001_library_indexes` (chỉ thêm index), `0002_app_settings` (bảng cài đặt chung, hiện lưu múi giờ). Lệnh deploy của Workers Builds tự áp dụng migration mới trước khi deploy.
 - **Sửa schema:** sửa `src/db/schema.ts` → `npm run db:generate` → commit file migration mới. Workers Builds tự áp dụng khi deploy.

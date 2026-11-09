@@ -1,0 +1,6 @@
+﻿caption,link,image_url,scheduled_at,pages
+"Bài nháp, nhiều dòng.
+Caption có dấu phẩy, và ""ngoặc kép"" vẫn đúng nếu đặt trong ngoặc kép.",https://example.com/san-pham,,,Tên Page của bạn
+"Bài có ảnh, đăng lúc 9h sáng 01/12 theo múi giờ đang chọn trên app",https://example.com/khuyen-mai,https://example.com/anh-khuyen-mai.jpg,2026-12-01 09:00,Tên Page của bạn
+Cùng một bài đăng lên 2 Page (tên Page ngăn cách bằng |),,,2026-12-01 20:00,Tên Page A|Tên Page B
+Chỉ định Page bằng ID Facebook và giờ có offset +07:00,,,2026-12-02T08:00:00+07:00,123456789012345

@@ -33,6 +33,10 @@ export function ImportCsv({ onImported }: { onImported: () => void }) {
         Cột: <code>caption,link,image_url,scheduled_at</code>, thêm cột tuỳ chọn <code>pages</code> (tên hoặc id Page, nhiều Page ngăn cách bằng <code>|</code>; bỏ trống khi chỉ bật 1 Page). <code>scheduled_at</code>{" "}
         theo ISO 8601, không có offset thì hiểu là giờ theo múi giờ đang chọn ({TIME_ZONES.find((z) => z.id === tz)?.label}), để trống = nháp. Có một dòng lỗi thì không dòng nào được import.
       </p>
+      <p className="text-sm">
+        <a className="text-blue-700 underline" href="/import-mau.csv" download>Tải file CSV mẫu</a>{" "}
+        <span className="text-gray-600">(mở bằng Excel/Google Sheets, sửa tên Page và nội dung, rồi lưu dạng CSV UTF-8)</span>
+      </p>
       <div className="flex flex-wrap items-center gap-2">
         <FileButton label="Chọn file CSV" accept=".csv,text/csv" file={file} onChange={setFile} />
         <Button variant="primary" disabled={!file} onClick={upload}>Import</Button>

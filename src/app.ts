@@ -11,6 +11,7 @@ import { mediaRoutes } from "./routes/media";
 import { oauthRoutes } from "./routes/oauth";
 import { postRoutes } from "./routes/posts";
 import { scheduleRoutes } from "./routes/schedule";
+import { settingRoutes } from "./routes/settings";
 import { slotRoutes } from "./routes/slots";
 import { targetRoutes } from "./routes/targets";
 
@@ -26,6 +27,7 @@ app.route("/posts", scheduleRoutes);
 app.route("/media", mediaRoutes);
 app.route("/import", importRoutes);
 app.route("/slots", slotRoutes);
+app.route("/settings", settingRoutes);
 app.route("/accounts", accountRoutes);
 app.route("/oauth", oauthRoutes);
 app.route("/targets", targetRoutes);

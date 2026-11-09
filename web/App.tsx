@@ -34,7 +34,12 @@ export function App() {
   const [editing, setEditing] = useState<Post | "new" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tz, setTz] = useState<TimeZone>(loadTz);
-  const changeTz = (value: TimeZone) => (setTz(value), saveTz(value));
+  // Múi giờ lưu chung trên server; bản trong trình duyệt chỉ để hiện đúng ngay lúc mở trang.
+  const applyTz = (value: TimeZone) => (setTz(value), saveTz(value));
+  const changeTz = (value: TimeZone) => {
+    applyTz(value);
+    api("/settings", { method: "PUT", json: { timeZone: value } }).catch((e: Error) => setError(`Không lưu được múi giờ: ${e.message}`));
+  };
 
   const reload = useCallback(() => {
     setLibraryKey((n) => n + 1);
@@ -43,6 +48,7 @@ export function App() {
 
   useEffect(() => {
     api<{ email: string }>("/me").then((d) => setEmail(d.email), (e: Error) => setError(e.message));
+    api<{ timeZone: TimeZone }>("/settings").then((d) => applyTz(d.timeZone), () => undefined);
     reload();
   }, [reload]);
 

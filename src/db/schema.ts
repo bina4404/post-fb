@@ -99,3 +99,10 @@ export const oauthStates = sqliteTable("oauth_states", {
   platform: accountPlatform(),
   createdAt: integer("created_at").notNull(),
 });
+
+// Cài đặt chung cho cả app, đúng một dòng (id = 1). Múi giờ lưu ở đây để mọi phiên đăng nhập dùng chung.
+export const appSettings = sqliteTable("app_settings", {
+  id: integer("id").primaryKey(),
+  timeZone: text("time_zone").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});
