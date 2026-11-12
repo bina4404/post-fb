@@ -4,6 +4,8 @@ import { accounts, postTargets } from "../db/schema";
 import type { WorkerEnv } from "../env";
 import { log } from "../lib/log";
 import { staggerDelays } from "../lib/pacing";
+import { appTimeZone } from "../lib/settings";
+import { planAutoPosts } from "./planner";
 import type { PublishMessage } from "./publish";
 
 // Lớn hơn thời gian chạy tối đa của một queue consumer (15 phút), nên không còn lệnh gọi nào đang chạy.
@@ -72,4 +74,11 @@ export async function runCron(env: WorkerEnv, now = Date.now()) {
   const db = getDb(env);
   await failStuck(db, now);
   await enqueueDue(db, env, now);
+  if (new Date(now).getUTCMinutes() === 0) {
+    try {
+      await planAutoPosts(db, now, await appTimeZone(db));
+    } catch (err) {
+      log("error", "autoplan_failed", { message: (err as Error).message });
+    }
+  }
 }

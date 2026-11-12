@@ -18,6 +18,8 @@ export const accounts = sqliteTable(
     accessExpiresAt: integer("access_expires_at"),
     refreshExpiresAt: integer("refresh_expires_at"),
     enabled: integer("enabled", { mode: "boolean" }).notNull().default(false),
+    // Đăng tự động từ kho ảnh cho Page này (giờ đăng ở bảng page_times).
+    autoEnabled: integer("auto_enabled", { mode: "boolean" }).notNull().default(false),
     // paused: Facebook chặn Page vì nghi lạm dụng (mã 368); kết nối lại Facebook để chạy tiếp. Enum chỉ ở TypeScript.
     status: text("status", { enum: ["ok", "needs_reauth", "paused"] }).notNull().default("ok"),
     updatedAt: integer("updated_at").notNull(),
@@ -49,7 +51,11 @@ export const posts = sqliteTable("posts", {
   scheduledAt: integer("scheduled_at"),
   createdAt: integer("created_at").notNull(),
   updatedAt: integer("updated_at").notNull(),
-});
+}, (t) => [
+  // Bộ lập lịch tự động tra "ảnh này đã/sẽ đăng lúc nào" theo image_key và thời gian.
+  index("posts_image_idx").on(t.imageKey, t.scheduledAt),
+  index("posts_scheduled_idx").on(t.scheduledAt),
+]);
 
 export const targetStatuses = ["draft", "scheduled", "publishing", "published", "failed"] as const;
 
@@ -106,3 +112,27 @@ export const appSettings = sqliteTable("app_settings", {
   timeZone: text("time_zone").notNull(),
   updatedAt: integer("updated_at").notNull(),
 });
+
+/** Kho ảnh cho đăng tự động: ảnh trong thư mục post-fb trên Drive, kèm tối đa 10 caption (JSON array). */
+export const images = sqliteTable("images", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  driveFileId: text("drive_file_id").notNull().unique(),
+  name: text("name").notNull(),
+  captions: text("captions", { mode: "json" }).$type<string[]>().notNull().default([]),
+  enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});
+
+/** Giờ đăng tự động của từng Page, áp dụng mọi ngày, theo múi giờ của app (phút trong ngày 0–1439). */
+export const pageTimes = sqliteTable(
+  "page_times",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    accountId: integer("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    minuteOfDay: integer("minute_of_day").notNull(),
+  },
+  (t) => [unique().on(t.accountId, t.minuteOfDay)],
+);

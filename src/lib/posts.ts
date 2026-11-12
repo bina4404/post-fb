@@ -4,7 +4,7 @@ import { accounts, posts, postTargets } from "../db/schema";
 import { scheduleFields } from "./schedule";
 
 export type Platform = "facebook";
-export type TargetInput = { platform: Platform; accountId: number };
+export type TargetInput = { platform: Platform; accountId: number; key?: string };
 export type PostInput = {
   caption: string;
   link: string | null;
@@ -36,7 +36,7 @@ export function targetRows(postId: number | SQL, targets: TargetInput[], at: num
     postId,
     platform: t.platform,
     accountId: t.accountId,
-    idempotencyKey: sql`${postId} || ${`:${t.platform}:${t.accountId}`}`,
+    idempotencyKey: t.key ?? sql`${postId} || ${`:${t.platform}:${t.accountId}`}`,
     ...scheduleFields(at),
     updatedAt: now,
   }));

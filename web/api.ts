@@ -7,6 +7,7 @@ export type Target = {
   externalPostId: string | null;
   lastError: string | null;
   needsAttention: boolean;
+  idempotencyKey?: string;
 };
 export type Post = {
   id: number;

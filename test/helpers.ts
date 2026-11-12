@@ -21,7 +21,7 @@ export function api(path: string, init: RequestInit & { json?: unknown } = {}, o
 export async function seed() {
   const now = Date.now();
   await env.DB.batch([
-    ...["post_targets", "posts", "boards", "accounts", "schedule_slots", "oauth_states"].map((t) =>
+    ...["post_targets", "posts", "page_times", "images", "app_settings", "boards", "accounts", "schedule_slots", "oauth_states"].map((t) =>
       env.DB.prepare(`DELETE FROM ${t}`),
     ),
     env.DB.prepare(

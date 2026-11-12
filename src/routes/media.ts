@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { getDb } from "../db/client";
+import { images } from "../db/schema";
 import type { AppEnv } from "../env";
 import { driveAccessToken } from "../lib/accounts";
 import { fail } from "../lib/http";
@@ -33,7 +34,10 @@ mediaRoutes.post("/", async (c) => {
     const token = await driveAccessToken(getDb(c.env), c.env, Date.now());
     const ext = file.type === "image/png" ? "png" : "jpg";
     const name = `${file.name.replace(/[.][^.]*$/, "") || "image"}-${crypto.randomUUID().slice(0, 8)}.${ext}`;
-    return uploadFile(token, await ensureFolder(token), name, { bytes, contentType: file.type });
+    const id = await uploadFile(token, await ensureFolder(token), name, { bytes, contentType: file.type });
+    const now = Date.now();
+    await getDb(c.env).insert(images).values({ driveFileId: id, name, createdAt: now, updatedAt: now }).onConflictDoNothing();
+    return id;
   });
   return c.json({ key }, 201);
 });

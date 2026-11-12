@@ -96,13 +96,19 @@ export async function ensureFolder(token: string): Promise<string> {
 
 export type DriveImage = { id: string; name: string; thumbnailLink?: string; createdTime: string };
 
-/** Ảnh trong thư mục post-fb, mới nhất trước. shortcut: tối đa 100 ảnh, thêm phân trang khi thư viện lớn hơn. */
+/** Mọi ảnh trong thư mục post-fb, mới nhất trước (đọc hết các trang kết quả, 1000 ảnh mỗi trang). */
 export async function listImages(token: string, folderId: string): Promise<DriveImage[]> {
   const q = `'${folderId}' in parents and trashed = false and mimeType contains 'image/'`;
-  const res = await call("list_images", listUrl(q, "files(id,name,thumbnailLink,createdTime)", { orderBy: "createdTime desc", pageSize: "100" }), {
-    headers: bearer(token),
-  });
-  return ((await res.json()) as { files: DriveImage[] }).files;
+  const all: DriveImage[] = [];
+  let pageToken: string | undefined;
+  do {
+    const extra: Record<string, string> = { orderBy: "createdTime desc", pageSize: "1000", ...(pageToken ? { pageToken } : {}) };
+    const res = await call("list_images", listUrl(q, "nextPageToken,files(id,name,thumbnailLink,createdTime)", extra), { headers: bearer(token) });
+    const page = (await res.json()) as { files: DriveImage[]; nextPageToken?: string };
+    all.push(...page.files);
+    pageToken = page.nextPageToken;
+  } while (pageToken);
+  return all;
 }
 
 /** Upload kiểu multipart/related (metadata + nội dung trong một request) vào thư mục `folderId`. Trả về id của file. */

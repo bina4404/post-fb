@@ -42,7 +42,10 @@ export function PostRow({ post, dest, onEdit, onChanged, selected, onSelect }: R
         {post.imageKey && <img src={`/api/media/${post.imageKey}?thumb=1`} alt="" loading="lazy" className="h-16 w-16 rounded object-cover" />}
         <div className="min-w-0 flex-1">
           <p className="line-clamp-2 whitespace-pre-line text-sm">{post.caption}</p>
-          <p className="text-xs text-gray-500">{post.scheduledAt ? `Lịch: ${formatTime(post.scheduledAt, tz)}` : "Nháp"}</p>
+          <p className="text-xs text-gray-500">
+            {post.scheduledAt ? `Lịch: ${formatTime(post.scheduledAt, tz)}` : "Nháp"}
+            {post.targets.some((t) => t.idempotencyKey?.startsWith("auto:")) && <span className="ml-2 rounded bg-purple-100 px-1.5 text-purple-800">Tự động</span>}
+          </p>
           <ul className="mt-1 flex flex-wrap gap-2 text-xs">
             {post.targets.map((t) => (
               <li key={t.id} className="flex items-center gap-1">
