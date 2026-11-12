@@ -6,7 +6,7 @@ import { posts, postTargets } from "../db/schema";
 import type { AppEnv } from "../env";
 import { fail, idParam, readJson } from "../lib/http";
 import { listLibrary, POST_GROUPS } from "../lib/library";
-import { contentError, insertPost, loadDestinations, targetRows, type TargetInput } from "../lib/posts";
+import { contentError, insertPost, insertTargets, loadDestinations, type TargetInput } from "../lib/posts";
 import { parseScheduleTime } from "../lib/time";
 import { UNKNOWN_OUTCOME_ERROR } from "../jobs/cron";
 import { driveFileId } from "../platforms/drive";
@@ -106,7 +106,7 @@ postRoutes.patch("/:id", async (c) => {
   await db.batch([
     db.update(posts).set({ caption, link, imageKey, imageUrl, updatedAt: now }).where(eq(posts.id, id)),
     db.delete(postTargets).where(eq(postTargets.postId, id)),
-    db.insert(postTargets).values(targetRows(id, input.targets, post.scheduledAt, now)),
+    ...insertTargets(db, id, input.targets, post.scheduledAt, now),
   ]);
   return c.json(await loadPost(db, id));
 });

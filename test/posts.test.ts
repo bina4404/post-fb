@@ -173,3 +173,30 @@ describe("cross-site requests (CSRF)", () => {
     expect((await api("/posts", { headers: { "Sec-Fetch-Site": "cross-site" } })).status).toBe(200); // GET vẫn đọc được
   });
 });
+
+describe("many Pages and large selections (D1 allows at most 100 parameters per query)", () => {
+  it("creates and edits a post for 30 Pages at once", async () => {
+    const now = Date.now();
+    await env.DB.batch(
+      Array.from({ length: 28 }, (_, i) =>
+        env.DB.prepare("INSERT INTO accounts (id, platform, external_id, name, enabled, updated_at) VALUES (?, 'facebook', ?, ?, 1, ?)").bind(100 + i, `p${i}`, `Page ${i}`, now),
+      ),
+    );
+    await env.DB.prepare("UPDATE accounts SET enabled = 1").run();
+    const ids = [1, 2, ...Array.from({ length: 28 }, (_, i) => 100 + i)];
+    const res = await api("/posts", { method: "POST", json: { caption: "x", facebookAccountIds: ids, scheduledAt: inHours(2) } });
+    expect(res.status).toBe(201);
+    const post = (await res.json()) as Post;
+    expect(post.targets).toHaveLength(30);
+    const edit = await api(`/posts/${post.id}`, { method: "PATCH", json: { caption: "y", facebookAccountIds: ids } });
+    expect(edit.status).toBe(200);
+  });
+
+  it("bulk-deletes more than 100 selected posts", async () => {
+    const now = Date.now();
+    await env.DB.batch(Array.from({ length: 120 }, (_, i) => env.DB.prepare("INSERT INTO posts (id, caption, created_at, updated_at) VALUES (?, 'x', ?, ?)").bind(1000 + i, now, now)));
+    const res = await api("/posts/bulk", { method: "POST", json: { action: "delete", ids: Array.from({ length: 120 }, (_, i) => 1000 + i) } });
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { done: number[] }).done).toHaveLength(120);
+  });
+});

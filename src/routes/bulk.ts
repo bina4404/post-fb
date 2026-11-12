@@ -34,11 +34,14 @@ bulkRoutes.post("/bulk", async (c) => {
 
   if (action === "delete") {
     const locked = sql`${postTargets.postId} = ${posts.id} AND ${postTargets.status} IN ('published', 'publishing')`;
-    const deleted = await db
-      .delete(posts)
-      .where(and(inArray(posts.id, unique), notExists(db.select({ x: sql`1` }).from(postTargets).where(locked))))
-      .returning({ id: posts.id });
-    done.push(...deleted.map((d) => d.id));
+    // Xoá từng nhóm 90 id: D1 cho phép tối đa 100 tham số mỗi câu SQL.
+    for (let i = 0; i < unique.length; i += 90) {
+      const deleted = await db
+        .delete(posts)
+        .where(and(inArray(posts.id, unique.slice(i, i + 90)), notExists(db.select({ x: sql`1` }).from(postTargets).where(locked))))
+        .returning({ id: posts.id });
+      done.push(...deleted.map((d) => d.id));
+    }
     for (const id of unique) if (!done.includes(id)) skipped.push({ id, reason: "đã/đang đăng hoặc không tồn tại" });
     return c.json({ done, skipped });
   }

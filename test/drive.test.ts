@@ -194,6 +194,16 @@ describe("sync the image library with the Drive folder", () => {
     expect(await rows()).toEqual([{ id: "manual-photo-1", enabled: 1 }, { id: "manual-photo-2", enabled: 0 }]);
   });
 
+  it("handles a folder with many images (D1 allows at most 100 parameters per query)", async () => {
+    await seedDrive();
+    const many = Array.from({ length: 150 }, (_, i) => ({ id: `bulk-photo-${String(i).padStart(3, "0")}`, name: `p${i}.jpg` }));
+    folderWith(many);
+    expect(await (await api("/images/sync", { method: "POST" })).json()).toEqual({ added: 150, disabled: 0, total: 150 });
+    vi.restoreAllMocks();
+    folderWith(many.slice(0, 140));
+    expect(await (await api("/images/sync", { method: "POST" })).json()).toEqual({ added: 0, disabled: 10, total: 140 });
+  });
+
   it("never disables the whole library when the folder comes back empty", async () => {
     await seedDrive();
     folderWith([{ id: "manual-photo-1", name: "a.jpg" }]);
