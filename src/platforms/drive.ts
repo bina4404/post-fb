@@ -13,8 +13,9 @@ export const googleConfig = (env: WorkerEnv): GoogleConfig => ({
   clientSecret: env.GOOGLE_CLIENT_SECRET,
 });
 
-// drive.file: app chỉ thấy file do chính nó tạo. Scope không nhạy cảm, không cần Google xét duyệt.
-export const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
+// drive.file: tạo thư mục và upload ảnh. drive.readonly: đọc được cả ảnh bạn tự bỏ vào thư mục post-fb trên Drive
+// (quyền hạn chế của Google: app chưa xác minh sẽ hiện cảnh báo khi kết nối, vẫn bấm tiếp tục được).
+export const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly";
 export const driveFileId = z.string().regex(/^[\w-]{10,200}$/);
 
 const DRIVE = "https://www.googleapis.com/drive/v3";

@@ -2,6 +2,8 @@
 
 Web app đăng bài theo lịch lên Facebook Page và Pinterest Board. Một Worker duy nhất (Hono API + React SPA qua Static Assets), D1 + Google Drive (ảnh) + Cron + Queues, đăng nhập bằng Cloudflare Access.
 
+> **Thay đổi 12/11/2026 – Đồng bộ ảnh có sẵn trên Drive:** thêm quyền `drive.readonly` (giữ `drive.file` để upload) để kho ảnh thấy cả ảnh bạn tự bỏ vào thư mục `post-fb`; cron đồng bộ mỗi giờ trước khi lập lịch (`src/jobs/drive-sync.ts`). Thư mục trả về rỗng thì không tắt kho ảnh. Cần kết nối lại Google Drive để cấp quyền mới.
+>
 > **Thay đổi 12/11/2026 – Đăng tự động từ kho ảnh** (tab "Tự động"): kho ảnh = ảnh upload qua app vào thư mục `post-fb` trên Drive (bảng `images`, tối đa 10 caption/ảnh); mỗi Page một danh sách giờ đăng áp dụng mọi ngày theo múi giờ của app (bảng `page_times`, bật/tắt bằng `accounts.auto_enabled`). Bộ lập lịch (`src/lib/autoplan.ts` + `src/jobs/planner.ts`, chạy mỗi giờ và khi đổi cài đặt) lấp trước 7 ngày: chọn ngẫu nhiên trong 5 ảnh lâu chưa dùng nhất, caption ngẫu nhiên; một ảnh không lặp trên cùng Page trong 7 ngày và không lên 2 Page trong 24 giờ; thiếu ảnh thì bỏ trống khung giờ. Bài tự động là bài thường (khoá idempotency `auto:<page>:<giờ>` chống tạo trùng), nên giãn cách, retry, "Đăng lại" áp dụng như cũ. Migration `0003_auto_posting` chỉ thêm bảng/cột/index (bạn đã duyệt).
 >
 > **Thay đổi 09/11/2026:** múi giờ lưu **chung cho cả app** trong bảng `app_settings` (migration `0002`, bạn đã duyệt), qua `GET/PUT /api/settings`, nên không còn tự về Bangkok khi đăng nhập ở phiên khác. File CSV mẫu: `web/public/import-mau.csv` (link "Tải file CSV mẫu" ở tab Import CSV).

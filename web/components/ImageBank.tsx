@@ -104,7 +104,7 @@ function Uploader({ onDone }: { onDone: (message: string) => void }) {
         Chọn nhiều ảnh
         <input type="file" multiple accept={ACCEPTED.join(",")} className="sr-only" onChange={(e) => void upload([...(e.target.files ?? [])])} />
       </label>
-      <span className="text-gray-500">{progress ?? "hoặc kéo thả nhiều ảnh vào đây (JPEG ≤4MB, PNG ≤1MB). Ảnh lưu vào thư mục post-fb trên Google Drive."}</span>
+      <span className="text-gray-500">{progress ?? "hoặc kéo thả nhiều ảnh vào đây (JPEG ≤4MB, PNG ≤1MB). Bạn cũng có thể bỏ ảnh thẳng vào thư mục post-fb trên Google Drive: app tự đồng bộ mỗi giờ, hoặc bấm Đồng bộ từ Drive."}</span>
     </div>
   );
 }
@@ -132,7 +132,7 @@ export function ImageBank({ onChanged }: { onChanged: () => void }) {
     <section className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="font-semibold">Kho ảnh ({list?.length ?? "…"} ảnh)</h2>
-        <Button onClick={sync} title="Đọc lại thư mục post-fb trên Drive">Đồng bộ từ Drive</Button>
+        <Button onClick={sync} title="Đọc lại thư mục post-fb trên Drive (app cũng tự đồng bộ mỗi giờ)">Đồng bộ từ Drive</Button>
       </div>
       <Uploader onDone={(m) => changed(m)} />
       {message && <p role="status" className="rounded bg-gray-100 p-2 text-sm">{message} <button className="ml-2 text-blue-700 underline" onClick={() => setMessage(null)}>Đóng</button></p>}

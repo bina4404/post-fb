@@ -4,11 +4,10 @@ import { z } from "zod";
 import { getDb } from "../db/client";
 import { images, posts, postTargets } from "../db/schema";
 import type { AppEnv } from "../env";
+import { syncDriveImages } from "../jobs/drive-sync";
 import { clearFutureAuto, planAutoPosts, refreshAutoCaptions } from "../jobs/planner";
-import { driveAccessToken } from "../lib/accounts";
 import { fail, idParam, readJson } from "../lib/http";
 import { appTimeZone } from "../lib/settings";
-import { ensureFolder, listImages } from "../platforms/drive";
 import { PublishFailure } from "../platforms/errors";
 
 export const MAX_CAPTIONS = 10;
@@ -40,32 +39,15 @@ imageRoutes.get("/", async (c) => {
   return c.json(list.map((img) => ({ ...img, lastUsedAt: byKey.get(img.driveFileId)?.lastUsedAt ?? null, nextUseAt: byKey.get(img.driveFileId)?.nextUseAt ?? null })));
 });
 
-/** Đồng bộ với thư mục post-fb trên Drive: thêm ảnh mới; ảnh đã bị xoá trên Drive thì tắt và bỏ các bài tự động chưa đi. */
+/** Đồng bộ ngay với thư mục post-fb trên Drive (cron cũng tự đồng bộ mỗi giờ). */
 imageRoutes.post("/sync", async (c) => {
   const db = getDb(c.env);
-  const now = Date.now();
-  let files;
   try {
-    const token = await driveAccessToken(db, c.env, now);
-    files = await listImages(token, await ensureFolder(token));
+    return c.json(await syncDriveImages(db, c.env, Date.now()));
   } catch (err) {
     if (err instanceof PublishFailure) throw fail(400, `Google Drive: ${err.message}`);
     throw err;
   }
-  const known = new Set((await db.select({ id: images.driveFileId }).from(images)).map((r) => r.id));
-  const added = files.filter((f) => !known.has(f.id));
-  for (let i = 0; i < added.length; i += 50) {
-    const rows = added.slice(i, i + 50).map((f) => ({ driveFileId: f.id, name: f.name, createdAt: now, updatedAt: now }));
-    await db.insert(images).values(rows).onConflictDoNothing();
-  }
-  const onDrive = files.map((f) => f.id);
-  const gone = await db
-    .update(images)
-    .set({ enabled: false, updatedAt: now })
-    .where(and(eq(images.enabled, true), onDrive.length ? notInArray(images.driveFileId, onDrive) : undefined))
-    .returning({ driveFileId: images.driveFileId });
-  for (const g of gone) await clearFutureAuto(db, { imageKey: g.driveFileId });
-  return c.json({ added: added.length, disabled: gone.length, total: files.length });
 });
 
 /** Sửa caption (tối đa 10) hoặc bật/tắt ảnh. Bài tự động chưa đi được cập nhật theo, khung giờ trống được lấp lại. */

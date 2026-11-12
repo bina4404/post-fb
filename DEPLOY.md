@@ -33,13 +33,13 @@ Làm theo thứ tự. Mọi lệnh có `--remote`, `wrangler deploy` hay `wrangl
 ## 4b. Google Drive (lưu ảnh)
 
 - [ ] console.cloud.google.com → tạo project → **APIs & Services → Library** → bật **Google Drive API**.
-- [ ] **OAuth consent screen**: User type *External*, thêm scope `.../auth/drive.file`, thêm email của bạn vào *Test users*.
+- [ ] **OAuth consent screen**: User type *External*, thêm scope `.../auth/drive.file` và `.../auth/drive.readonly`, thêm email của bạn vào *Test users*.
 - [ ] **Bắt buộc: bấm *Publish app* (chuyển sang *In production*).** Khi app còn ở *Testing*, refresh token của Google **hết hạn sau 7 ngày** và bạn sẽ phải kết nối lại mỗi tuần. `drive.file` là scope không nhạy cảm nên không cần Google xét duyệt; màn hình đồng ý có thể hiện cảnh báo "chưa xác minh", bấm tiếp tục.
 - [ ] **Credentials → Create credentials → OAuth client ID → Web application**. Authorized redirect URIs:
   - `https://tools.new2h.com/api/oauth/google/callback`
   - `http://localhost:8787/api/oauth/google/callback` (để chạy local)
 - [ ] Ghi lại Client ID và Client secret.
-- [ ] Sau deploy: tab **Tài khoản → Kết nối Google Drive**. Chưa kết nối thì upload ảnh báo lỗi. Ảnh nằm trong thư mục **`post-fb`** ở My Drive (app tự tạo ở lần upload đầu). App chỉ thấy file do chính nó tạo (scope `drive.file`): ảnh bạn tự kéo vào thư mục đó trên Drive sẽ **không** hiện trong "Chọn từ Google Drive", hãy upload qua app.
+- [ ] Sau deploy: tab **Tài khoản → Kết nối Google Drive**. Chưa kết nối thì upload ảnh báo lỗi. Ảnh nằm trong thư mục **`post-fb`** ở My Drive (app tự tạo ở lần upload đầu). Nhờ quyền `drive.readonly`, app thấy cả ảnh bạn tự bỏ vào thư mục `post-fb` trên Drive: kho ảnh tự đồng bộ mỗi giờ (hoặc bấm "Đồng bộ từ Drive" ở tab Tự động). `drive.readonly` là quyền hạn chế: khi kết nối, Google hiện "ứng dụng chưa được xác minh" → Nâng cao → Đi tới post-fb.
 
 ## 5. Secrets
 

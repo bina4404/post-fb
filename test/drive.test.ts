@@ -136,7 +136,7 @@ describe("Google OAuth", () => {
     const location = new URL(start.headers.get("location")!);
     expect(location.origin + location.pathname).toBe("https://accounts.google.com/o/oauth2/v2/auth");
     expect(Object.fromEntries(location.searchParams)).toMatchObject({
-      scope: "https://www.googleapis.com/auth/drive.file",
+      scope: "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly",
       access_type: "offline",
       prompt: "consent",
       redirect_uri: "http://localhost/api/oauth/google/callback",
@@ -166,5 +166,41 @@ describe("library thumbnails", () => {
     expect(new Uint8Array(await res.arrayBuffer())).toEqual(new Uint8Array([1, 2]));
     expect(new URL(calls[0]!.url).searchParams.get("fields")).toBe("thumbnailLink");
     expect(calls[1]!.headers.get("authorization")).toBe("Bearer ya29.ACCESS");
+  });
+});
+
+describe("sync the image library with the Drive folder", () => {
+  /** Drive giả: thư mục post-fb đã có, nội dung thư mục đổi theo `files`. */
+  function folderWith(files: { id: string; name: string }[]) {
+    return mockFetch({
+      [`GET ${DRIVE}/files`]: (req) => {
+        const q = new URL(req.url).searchParams.get("q") ?? "";
+        return Response.json({ files: q.includes("vnd.google-apps.folder") ? [{ id: "folder-1" }] : files });
+      },
+    });
+  }
+  const rows = async () =>
+    (await env.DB.prepare("SELECT drive_file_id AS id, enabled FROM images ORDER BY drive_file_id").all<{ id: string; enabled: number }>()).results;
+
+  it("adds images you put in the folder yourself, and disables ones removed from Drive", async () => {
+    await seedDrive();
+    folderWith([{ id: "manual-photo-1", name: "a.jpg" }, { id: "manual-photo-2", name: "b.png" }]);
+    expect(await (await api("/images/sync", { method: "POST" })).json()).toEqual({ added: 2, disabled: 0, total: 2 });
+    expect(await rows()).toEqual([{ id: "manual-photo-1", enabled: 1 }, { id: "manual-photo-2", enabled: 1 }]);
+
+    vi.restoreAllMocks();
+    folderWith([{ id: "manual-photo-1", name: "a.jpg" }]);
+    expect(await (await api("/images/sync", { method: "POST" })).json()).toEqual({ added: 0, disabled: 1, total: 1 });
+    expect(await rows()).toEqual([{ id: "manual-photo-1", enabled: 1 }, { id: "manual-photo-2", enabled: 0 }]);
+  });
+
+  it("never disables the whole library when the folder comes back empty", async () => {
+    await seedDrive();
+    folderWith([{ id: "manual-photo-1", name: "a.jpg" }]);
+    await api("/images/sync", { method: "POST" });
+    vi.restoreAllMocks();
+    folderWith([]);
+    expect(await (await api("/images/sync", { method: "POST" })).json()).toEqual({ added: 0, disabled: 0, total: 0 });
+    expect(await rows()).toEqual([{ id: "manual-photo-1", enabled: 1 }]);
   });
 });
