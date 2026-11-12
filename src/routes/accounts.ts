@@ -4,6 +4,7 @@ import { z } from "zod";
 import { getDb } from "../db/client";
 import { accounts } from "../db/schema";
 import type { AppEnv } from "../env";
+import { withDistinctNames } from "../lib/accounts";
 import { fail, idParam, readJson } from "../lib/http";
 
 const enabledBody = z.object({ enabled: z.boolean() });
@@ -18,12 +19,13 @@ accountRoutes.get("/", async (c) => {
       id: accounts.id,
       platform: accounts.platform,
       name: accounts.name,
+      externalId: accounts.externalId,
       enabled: accounts.enabled,
       status: accounts.status,
       accessExpiresAt: accounts.accessExpiresAt,
     })
     .from(accounts);
-  return c.json({ accounts: accountList });
+  return c.json({ accounts: withDistinctNames(accountList) });
 });
 
 accountRoutes.patch("/:id", async (c) => {

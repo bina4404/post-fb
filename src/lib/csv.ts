@@ -30,7 +30,10 @@ function rowPages(cell: string | undefined, dest: Destinations): number[] | stri
   }
   const ids: number[] = [];
   for (const wanted of cell.split("|").map((x) => x.trim()).filter(Boolean)) {
-    const page = dest.pages.find((p) => p.externalId === wanted || p.name.toLowerCase() === wanted.toLowerCase());
+    const byId = dest.pages.find((p) => p.externalId === wanted);
+    const byName = dest.pages.filter((p) => p.name.toLowerCase() === wanted.toLowerCase());
+    if (!byId && byName.length > 1) return `có ${byName.length} Page cùng tên "${wanted}": ghi id Page thay cho tên`;
+    const page = byId ?? byName[0];
     if (!page) return `không có Page đang bật tên/id "${wanted}"`;
     ids.push(page.id);
   }

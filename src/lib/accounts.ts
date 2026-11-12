@@ -21,6 +21,13 @@ export async function saveFacebookPages(db: Db, env: WorkerEnv, pages: FacebookP
   }
 }
 
+/** Tên hiển thị: Page trùng tên thì thêm ID Facebook để phân biệt trên giao diện. */
+export function withDistinctNames<T extends { name: string; externalId: string }>(rows: T[]): T[] {
+  const count = new Map<string, number>();
+  for (const r of rows) count.set(r.name, (count.get(r.name) ?? 0) + 1);
+  return rows.map((r) => (count.get(r.name)! > 1 ? { ...r, name: `${r.name} (ID ${r.externalId})` } : r));
+}
+
 /** Lưu tài khoản Google Drive (theo email). Kết nối lại thì cập nhật token và đưa status về 'ok'. */
 export async function saveGoogleAccount(db: Db, env: WorkerEnv, email: string, t: GoogleTokens, now: number) {
   if (!t.refreshToken) throw new PublishFailure("permanent", "Google không trả refresh token, hãy kết nối lại");

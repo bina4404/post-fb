@@ -6,6 +6,7 @@ import { accounts, pageTimes } from "../db/schema";
 import type { AppEnv } from "../env";
 import { clearFutureAuto, planAutoPosts, upcomingAutoCounts, type PlanResult } from "../jobs/planner";
 import { minImagesNeeded } from "../lib/autoplan";
+import { withDistinctNames } from "../lib/accounts";
 import { fail, idParam, readJson } from "../lib/http";
 import { PAGE_DAILY_CAP, PAGE_MIN_GAP_MS } from "../lib/pacing";
 import { appTimeZone } from "../lib/settings";
@@ -36,14 +37,14 @@ autoRoutes.get("/", async (c) => {
   const now = Date.now();
   const [pages, times, counts, ready] = await Promise.all([
     db
-      .select({ id: accounts.id, name: accounts.name, autoEnabled: accounts.autoEnabled, status: accounts.status })
+      .select({ id: accounts.id, name: accounts.name, externalId: accounts.externalId, autoEnabled: accounts.autoEnabled, status: accounts.status })
       .from(accounts)
       .where(and(eq(accounts.platform, "facebook"), eq(accounts.enabled, true))),
     db.select().from(pageTimes),
     upcomingAutoCounts(db, now),
     readyImageCount(db),
   ]);
-  const list = pages.map((p) => ({
+  const list = withDistinctNames(pages).map((p) => ({
     ...p,
     times: times.filter((t) => t.accountId === p.id).map((t) => t.minuteOfDay).sort((a, b) => a - b),
     upcoming: Number(counts.find((n) => n.accountId === p.id)?.n ?? 0),
