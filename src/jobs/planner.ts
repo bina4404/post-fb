@@ -3,7 +3,7 @@
 import { and, eq, gte, inArray, isNotNull, like, lte, ne, sql } from "drizzle-orm";
 import type { Db } from "../db/client";
 import { accounts, images, pageTimes, posts, postTargets } from "../db/schema";
-import { autoKey, PLAN_DAYS, planPosts, SAME_PAGE_GAP_MS, upcomingPageSlots, type PlanSlot } from "../lib/autoplan";
+import { autoKey, PLAN_DAYS, planPosts, SAME_PAGE_GAP_MS, upcomingPageSlots, type MediaKind, type PlanImage, type PlanSlot } from "../lib/autoplan";
 import { log } from "../lib/log";
 import { insertPost } from "../lib/posts";
 import { DAY_MS } from "../lib/time";
@@ -14,12 +14,11 @@ const BATCH_POSTS = 40;
 
 export type PlanResult = { created: number; shortages: PlanSlot[] };
 
-async function autoPages(db: Db): Promise<number[]> {
-  const rows = await db
-    .select({ id: accounts.id })
+async function autoPages(db: Db) {
+  return db
+    .select({ id: accounts.id, reelFolderId: accounts.reelFolderId })
     .from(accounts)
     .where(and(eq(accounts.platform, "facebook"), eq(accounts.enabled, true), eq(accounts.autoEnabled, true), eq(accounts.status, "ok"), isNotNull(accounts.accessTokenEnc)));
-  return rows.map((r) => r.id);
 }
 
 /** Các lần ảnh đã/sẽ đăng quanh khoảng lập lịch (kể cả bài tay), trừ lần lỗi vì bài đó chưa lên. */
@@ -33,8 +32,10 @@ async function imageUses(db: Db, now: number) {
 }
 
 export async function planAutoPosts(db: Db, now: number, tz: string): Promise<PlanResult> {
-  const pageIds = await autoPages(db);
+  const pages = await autoPages(db);
+  const pageIds = pages.map((p) => p.id);
   if (pageIds.length === 0) return { created: 0, shortages: [] };
+  const folderOf = new Map(pages.map((p) => [p.id, p.reelFolderId]));
   const times = await db.select().from(pageTimes).where(inArray(pageTimes.accountId, pageIds));
   const existing = await db
     .select({ key: postTargets.idempotencyKey })
@@ -44,13 +45,19 @@ export async function planAutoPosts(db: Db, now: number, tz: string): Promise<Pl
   const free = upcomingPageSlots(times, now, tz).filter((s) => !taken.has(autoKey(s)));
   if (free.length === 0) return { created: 0, shortages: [] };
 
-  const pool = await db.select({ driveFileId: images.driveFileId, captions: images.captions }).from(images).where(eq(images.enabled, true));
-  const { planned, shortages } = planPosts(free.slice(0, MAX_PER_RUN), pool, await imageUses(db, now));
+  const pool = await db
+    .select({ driveFileId: images.driveFileId, captions: images.captions, kind: images.kind, folderId: images.folderId })
+    .from(images)
+    .where(eq(images.enabled, true));
+  // Giờ Reels chỉ lấy video trong thư mục Reels của chính Page đó; giờ ảnh chỉ lấy ảnh.
+  const fits = (img: PlanImage, slot: PlanSlot) =>
+    slot.kind === "reel" ? img.kind === "reel" && !!img.folderId && img.folderId === folderOf.get(slot.accountId) : img.kind !== "reel";
+  const { planned, shortages } = planPosts(free.slice(0, MAX_PER_RUN), pool, await imageUses(db, now), Math.random, fits);
   let created = 0;
   for (let i = 0; i < planned.length; i += BATCH_POSTS) {
     const chunk = planned.slice(i, i + BATCH_POSTS);
     const [first, ...rest] = chunk.flatMap((p) =>
-      insertPost(db, { caption: p.caption, link: null, imageKey: p.imageKey, imageUrl: null, scheduledAt: p.at, targets: [{ platform: "facebook", accountId: p.accountId, key: autoKey(p) }] }, now),
+      insertPost(db, { kind: p.kind ?? "image", caption: p.caption, link: null, imageKey: p.imageKey, imageUrl: null, scheduledAt: p.at, targets: [{ platform: "facebook", accountId: p.accountId, key: autoKey(p) }] }, now),
     );
     try {
       await db.batch([first!, ...rest]);
@@ -68,7 +75,7 @@ export async function planAutoPosts(db: Db, now: number, tz: string): Promise<Pl
  * Xoá bài tự động CHƯA đi (nháp/chờ) của một Page hoặc một ảnh, để lập lại theo cài đặt mới.
  * Không đụng bài đang đăng, đã đăng hay lỗi.
  */
-export async function clearFutureAuto(db: Db, filter: { accountId?: number; imageKey?: string }) {
+export async function clearFutureAuto(db: Db, filter: { accountId?: number; imageKey?: string; kind?: MediaKind }) {
   const targetFilter = and(
     like(postTargets.idempotencyKey, "auto:%"),
     inArray(postTargets.status, ["draft", "scheduled"]),
@@ -76,7 +83,13 @@ export async function clearFutureAuto(db: Db, filter: { accountId?: number; imag
   );
   await db
     .delete(posts)
-    .where(and(inArray(posts.id, db.select({ id: postTargets.postId }).from(postTargets).where(targetFilter)), filter.imageKey ? eq(posts.imageKey, filter.imageKey) : undefined));
+    .where(
+      and(
+        inArray(posts.id, db.select({ id: postTargets.postId }).from(postTargets).where(targetFilter)),
+        filter.imageKey ? eq(posts.imageKey, filter.imageKey) : undefined,
+        filter.kind ? eq(posts.kind, filter.kind) : undefined,
+      ),
+    );
 }
 
 /** Đổi caption của ảnh: bài tự động chưa đi dùng ảnh đó lấy lại ngẫu nhiên một caption mới. */
@@ -96,9 +109,9 @@ export async function refreshAutoCaptions(db: Db, imageKey: string, captions: st
 /** Số bài tự động sắp tới của từng Page. */
 export async function upcomingAutoCounts(db: Db, now: number) {
   return db
-    .select({ accountId: postTargets.accountId, n: sql<number>`count(*)` })
+    .select({ accountId: postTargets.accountId, kind: posts.kind, n: sql<number>`count(*)` })
     .from(postTargets)
     .innerJoin(posts, eq(posts.id, postTargets.postId))
     .where(and(like(postTargets.idempotencyKey, "auto:%"), inArray(postTargets.status, ["draft", "scheduled"]), gte(posts.scheduledAt, now)))
-    .groupBy(postTargets.accountId);
+    .groupBy(postTargets.accountId, posts.kind);
 }

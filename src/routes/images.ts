@@ -4,7 +4,7 @@ import { z } from "zod";
 import { getDb } from "../db/client";
 import { images, posts, postTargets } from "../db/schema";
 import type { AppEnv } from "../env";
-import { syncDriveImages } from "../jobs/drive-sync";
+import { syncDriveImages, syncReelVideos } from "../jobs/drive-sync";
 import { clearFutureAuto, planAutoPosts, refreshAutoCaptions } from "../jobs/planner";
 import { fail, idParam, readJson } from "../lib/http";
 import { appTimeZone } from "../lib/settings";
@@ -39,11 +39,12 @@ imageRoutes.get("/", async (c) => {
   return c.json(list.map((img) => ({ ...img, lastUsedAt: byKey.get(img.driveFileId)?.lastUsedAt ?? null, nextUseAt: byKey.get(img.driveFileId)?.nextUseAt ?? null })));
 });
 
-/** Đồng bộ ngay với thư mục post-fb trên Drive (cron cũng tự đồng bộ mỗi giờ). */
+/** Đồng bộ ngay thư mục post-fb (ảnh), hoặc các thư mục Reels của các Page (?kind=reel). Cron cũng tự đồng bộ mỗi giờ. */
 imageRoutes.post("/sync", async (c) => {
   const db = getDb(c.env);
+  const sync = c.req.query("kind") === "reel" ? syncReelVideos : syncDriveImages;
   try {
-    return c.json(await syncDriveImages(db, c.env, Date.now()));
+    return c.json(await sync(db, c.env, Date.now()));
   } catch (err) {
     if (err instanceof PublishFailure) throw fail(400, `Google Drive: ${err.message}`);
     throw err;
@@ -68,12 +69,12 @@ imageRoutes.patch("/:id", async (c) => {
   return c.json({ image: img, plan: { created: plan.created, shortages: plan.shortages.length } });
 });
 
-/** Dùng nội bộ: số ảnh sẵn sàng (đang bật và có ít nhất 1 caption). */
+/** Dùng nội bộ: số ảnh (không tính video Reels) sẵn sàng: đang bật và có ít nhất 1 caption. */
 export async function readyImageCount(db: ReturnType<typeof getDb>) {
   const [row] = await db
     .select({ n: sql<number>`count(*)` })
     .from(images)
-    .where(and(eq(images.enabled, true), sql`json_array_length(${images.captions}) > 0`));
+    .where(and(eq(images.kind, "image"), eq(images.enabled, true), sql`json_array_length(${images.captions}) > 0`));
   return Number(row?.n ?? 0);
 }
 

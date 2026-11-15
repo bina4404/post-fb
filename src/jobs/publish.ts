@@ -3,7 +3,7 @@ import { getDb, type Db } from "../db/client";
 import { accounts, posts, postTargets } from "../db/schema";
 import type { WorkerEnv } from "../env";
 import { decryptToken } from "../lib/crypto";
-import { loadImage } from "../lib/image";
+import { loadImage, loadVideo } from "../lib/image";
 import { JITTER_S, pageReadyAt, rateLimitBackoffMs } from "../lib/pacing";
 import { log } from "../lib/log";
 import { PublishFailure } from "../platforms/errors";
@@ -34,6 +34,10 @@ async function send(env: WorkerEnv, db: Db, target: Target): Promise<string | nu
   // Bị ngắt kết nối giữa lúc cron đẩy việc và lúc consumer chạy: trả về null để target nằm chờ.
   if (!account.accessTokenEnc || account.status !== "ok" || !account.enabled) return null;
   const token = await decryptToken(account.accessTokenEnc, env.TOKEN_ENC_KEY);
+  if (post.kind === "reel") {
+    if (!post.imageKey) throw new PublishFailure("permanent", "bài Reels thiếu video");
+    return facebook.publishReel(facebook.facebookConfig(env), account.externalId, token, { caption: post.caption, video: await loadVideo(env, post.imageKey) });
+  }
   const image = await loadImage(env, post);
   return facebook.publishPost(facebook.facebookConfig(env), account.externalId, token, { caption: post.caption, link: post.link, image });
 }

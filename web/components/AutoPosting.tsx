@@ -4,7 +4,20 @@ import { TIME_ZONES, useTz } from "../time";
 import { ImageBank } from "./ImageBank";
 import { Button, ErrorText, inputClass } from "./ui";
 
-type AutoPage = { id: number; name: string; autoEnabled: boolean; status: string; times: number[]; upcoming: number };
+type AutoPage = {
+  id: number;
+  name: string;
+  autoEnabled: boolean;
+  status: string;
+  times: number[];
+  reelTimes: number[];
+  upcoming: number;
+  upcomingReels: number;
+  reelFolderId: string | null;
+  reelFolderName: string | null;
+  readyVideos: number;
+};
+type Folder = { id: string; name: string };
 type Overview = { pages: AutoPage[]; readyImages: number; minImagesNeeded: number };
 type PlanSummary = { created: number; shortages: number };
 
@@ -12,24 +25,47 @@ const hhmm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${St
 const planText = (r: PlanSummary) =>
   `Đã lên lịch ${r.created} bài mới cho 7 ngày tới.${r.shortages ? ` ${r.shortages} khung giờ chưa có ảnh phù hợp (cần thêm ảnh có caption).` : ""}`;
 
-function PageTimes({ page, onSaved }: { page: AutoPage; onSaved: (message: string) => void }) {
-  const [enabled, setEnabled] = useState(page.autoEnabled);
-  const [times, setTimes] = useState(page.times);
+/** Danh sách giờ đăng (ảnh hoặc Reels) của một Page, thêm/xoá từng giờ. */
+function TimeList({ label, times, onChange }: { label: string; times: number[]; onChange: (times: number[]) => void }) {
   const [input, setInput] = useState("09:00");
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const dirty = enabled !== page.autoEnabled || times.join() !== page.times.join();
-
   function add() {
     const [h = 0, m = 0] = input.split(":").map(Number);
     const minute = h * 60 + m;
-    if (!times.includes(minute)) setTimes([...times, minute].sort((a, b) => a - b));
+    if (!times.includes(minute)) onChange([...times, minute].sort((a, b) => a - b));
   }
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="w-24 text-gray-600">{label}</span>
+      {times.map((t) => (
+        <span key={t} className="flex items-center gap-1 rounded bg-gray-100 px-2 py-1">
+          {hhmm(t)}
+          <button aria-label={`Xoá ${label} ${hhmm(t)}`} className="text-red-700" onClick={() => onChange(times.filter((x) => x !== t))}>×</button>
+        </span>
+      ))}
+      <input className={`${inputClass} w-auto`} type="time" value={input} onChange={(e) => setInput(e.target.value)} aria-label={label} />
+      <Button onClick={add}>Thêm giờ</Button>
+    </div>
+  );
+}
+
+function PageTimes({ page, folders, onSaved }: { page: AutoPage; folders: Folder[] | null; onSaved: (message: string) => void }) {
+  const [enabled, setEnabled] = useState(page.autoEnabled);
+  const [times, setTimes] = useState(page.times);
+  const [reelTimes, setReelTimes] = useState(page.reelTimes);
+  const [folder, setFolder] = useState<Folder | null>(page.reelFolderId ? { id: page.reelFolderId, name: page.reelFolderName ?? page.reelFolderId } : null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const folderChanged = (folder?.id ?? null) !== page.reelFolderId;
+  const dirty = enabled !== page.autoEnabled || times.join() !== page.times.join() || reelTimes.join() !== page.reelTimes.join() || folderChanged;
+  // Thư mục đang chọn có thể không còn trong danh sách (bị xoá/đổi quyền): vẫn hiện để biết.
+  const options = folder && folders && !folders.some((f) => f.id === folder.id) ? [folder, ...folders] : (folders ?? (folder ? [folder] : []));
+
   async function save() {
     setBusy(true);
     setError(null);
     try {
-      onSaved(`${page.name}: ${planText(await api<PlanSummary>(`/auto/pages/${page.id}`, { method: "PUT", json: { autoEnabled: enabled, times } }))}`);
+      const json = { autoEnabled: enabled, times, reelTimes, ...(folderChanged ? { reelFolder: folder } : {}) };
+      onSaved(`${page.name}: ${planText(await api<PlanSummary>(`/auto/pages/${page.id}`, { method: "PUT", json }))}`);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -43,20 +79,28 @@ function PageTimes({ page, onSaved }: { page: AutoPage; onSaved: (message: strin
         <label className="flex items-center gap-2 font-medium">
           <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} /> {page.name}
         </label>
-        <span className="text-gray-500">{page.upcoming} bài tự động sắp tới</span>
+        <span className="text-gray-500">{page.upcoming} bài ảnh · {page.upcomingReels} Reels sắp tới</span>
         {page.status !== "ok" && <span className="text-red-700">Page cần kết nối lại: bài sẽ nằm chờ</span>}
       </div>
+      <TimeList label="Giờ đăng ảnh" times={times} onChange={setTimes} />
+      <TimeList label="Giờ Reels" times={reelTimes} onChange={setReelTimes} />
       <div className="flex flex-wrap items-center gap-2">
-        {times.map((t) => (
-          <span key={t} className="flex items-center gap-1 rounded bg-gray-100 px-2 py-1">
-            {hhmm(t)}
-            <button aria-label={`Xoá giờ ${hhmm(t)}`} className="text-red-700" onClick={() => setTimes(times.filter((x) => x !== t))}>×</button>
-          </span>
-        ))}
-        <input className={`${inputClass} w-auto`} type="time" value={input} onChange={(e) => setInput(e.target.value)} aria-label="Giờ đăng" />
-        <Button onClick={add}>Thêm giờ</Button>
-        <Button variant="primary" disabled={!dirty || busy} onClick={save}>Lưu</Button>
+        <span className="w-24 text-gray-600">Thư mục video</span>
+        <select
+          className={`${inputClass} w-auto max-w-xs`}
+          aria-label={`Thư mục video Reels của ${page.name}`}
+          value={folder?.id ?? ""}
+          onChange={(e) => setFolder(options.find((f) => f.id === e.target.value) ?? null)}
+        >
+          <option value="">— Chưa chọn (không đăng Reels) —</option>
+          {options.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+        </select>
+        {page.reelFolderId && !folderChanged && (
+          <span className={page.readyVideos ? "text-gray-500" : "text-amber-700"}>{page.readyVideos} video sẵn sàng (có caption)</span>
+        )}
+        {reelTimes.length > 0 && !folder && <span className="text-amber-700">Chọn thư mục video để đăng Reels</span>}
       </div>
+      <Button variant="primary" disabled={!dirty || busy} onClick={save}>Lưu</Button>
       <ErrorText error={error} />
     </li>
   );
@@ -66,8 +110,12 @@ export function AutoPosting() {
   const tz = useTz();
   const [data, setData] = useState<Overview | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [folders, setFolders] = useState<Folder[] | null>(null);
   const load = useCallback(() => api<Overview>("/auto").then(setData, (e: Error) => setMessage(e.message)), []);
   useEffect(() => void load(), [load]);
+  // Chưa kết nối Google Drive thì không có danh sách thư mục; lỗi hiện ở thông báo chung.
+  useEffect(() => void api<Folder[]>("/auto/folders").then(setFolders, (e: Error) => setMessage(`Không đọc được thư mục Drive: ${e.message}`)), []);
+  const folderNames = new Map((data?.pages ?? []).filter((p) => p.reelFolderId).map((p) => [p.reelFolderId!, p.reelFolderName ?? ""]));
 
   async function planNow() {
     try {
@@ -87,6 +135,10 @@ export function AutoPosting() {
           ({TIME_ZONES.find((z) => z.id === tz)?.label}). Một ảnh không lặp lại trên cùng Page trong 7 ngày, và không lên 2 Page trong cùng 24 giờ.
           Thiếu ảnh thì khung giờ được để trống, không đăng lặp. Bài tự động hiện trong Thư viện, sửa hoặc xoá được như bài thường.
         </p>
+        <p>
+          <b>Reels:</b> mỗi Page chọn một thư mục video trên Drive (nhiều Page có thể dùng chung thư mục) và giờ đăng Reels riêng. Video dài 3–90 giây,
+          dọc 9:16, có caption mới được đăng; quy tắc không lặp giống ảnh. Giờ ảnh và giờ Reels của một Page phải cách nhau ít nhất 10 phút.
+        </p>
         {data && (
           <p className={short ? "font-medium text-amber-700" : "text-gray-600"}>
             Ảnh sẵn sàng (có caption, đang bật): {data.readyImages} · Cần tối thiểu: {data.minImagesNeeded}
@@ -99,11 +151,19 @@ export function AutoPosting() {
       <section className="space-y-2">
         <h2 className="font-semibold">Giờ đăng tự động theo Page</h2>
         <ul className="space-y-2">
-          {data?.pages.map((p) => <PageTimes key={`${p.id}-${p.times.join()}-${p.autoEnabled}`} page={p} onSaved={(m) => (setMessage(m), void load())} />)}
+          {data?.pages.map((p) => (
+            <PageTimes
+              key={`${p.id}-${p.times.join()}-${p.reelTimes.join()}-${p.reelFolderId}-${p.autoEnabled}`}
+              page={p}
+              folders={folders}
+              onSaved={(m) => (setMessage(m), void load())}
+            />
+          ))}
         </ul>
         {data && data.pages.length === 0 && <p className="text-sm text-gray-500">Chưa có Page nào được bật (tab Tài khoản).</p>}
       </section>
-      <ImageBank onChanged={() => void load()} />
+      <ImageBank kind="image" onChanged={() => void load()} />
+      <ImageBank kind="reel" folderNames={folderNames} onChanged={() => void load()} />
     </section>
   );
 }

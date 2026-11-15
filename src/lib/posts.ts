@@ -6,6 +6,7 @@ import { scheduleFields } from "./schedule";
 export type Platform = "facebook";
 export type TargetInput = { platform: Platform; accountId: number; key?: string };
 export type PostInput = {
+  kind?: "image" | "reel";
   caption: string;
   link: string | null;
   imageKey: string | null;

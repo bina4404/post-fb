@@ -5,7 +5,7 @@ import type { WorkerEnv } from "../env";
 import { log } from "../lib/log";
 import { staggerDelays } from "../lib/pacing";
 import { appTimeZone } from "../lib/settings";
-import { syncDriveImages } from "./drive-sync";
+import { syncDriveImages, syncReelVideos } from "./drive-sync";
 import { planAutoPosts } from "./planner";
 import type { PublishMessage } from "./publish";
 
@@ -78,6 +78,7 @@ export async function runCron(env: WorkerEnv, now = Date.now()) {
   if (new Date(now).getUTCMinutes() === 0) {
     // Ảnh mới bỏ vào thư mục post-fb trên Drive tự vào kho; chưa kết nối Drive thì bỏ qua, vẫn lập lịch bằng kho hiện có.
     await syncDriveImages(db, env, now).catch((err: Error) => log("warn", "drive_sync_skipped", { message: err.message }));
+    await syncReelVideos(db, env, now).catch((err: Error) => log("warn", "reel_sync_skipped", { message: err.message }));
     try {
       await planAutoPosts(db, now, await appTimeZone(db));
     } catch (err) {

@@ -2,7 +2,7 @@
 // developers.google.com/drive/api/guides/manage-uploads
 import { z } from "zod";
 import type { WorkerEnv } from "../env";
-import { fetchWithTimeout, platformError, type ErrorKind } from "./errors";
+import { fetchWithTimeout, platformError, VIDEO_TIMEOUT_MS, type ErrorKind } from "./errors";
 
 export type GoogleConfig = { clientId: string; clientSecret: string };
 export type GoogleTokens = { accessToken: string; refreshToken: string | null; accessExpiresAt: number };
@@ -27,8 +27,8 @@ function classify(status: number, error?: string): ErrorKind {
   return "permanent";
 }
 
-async function call(op: string, url: string, init: RequestInit = {}): Promise<Response> {
-  const res = await fetchWithTimeout("google", op, url, init);
+async function call(op: string, url: string, init: RequestInit = {}, timeoutMs?: number): Promise<Response> {
+  const res = await fetchWithTimeout("google", op, url, init, timeoutMs);
   if (res.ok) return res;
   const body = (await res.json().catch(() => ({}))) as { error?: string | { message?: string }; error_description?: string };
   const code = typeof body.error === "string" ? body.error : null;
@@ -95,21 +95,42 @@ export async function ensureFolder(token: string): Promise<string> {
   return ((await res.json()) as { id: string }).id;
 }
 
-export type DriveImage = { id: string; name: string; thumbnailLink?: string; createdTime: string };
+export type DriveImage = { id: string; name: string; thumbnailLink?: string; createdTime: string; videoMediaMetadata?: { durationMillis?: string } };
 
-/** Mọi ảnh trong thư mục post-fb, mới nhất trước (đọc hết các trang kết quả, 1000 ảnh mỗi trang). */
-export async function listImages(token: string, folderId: string): Promise<DriveImage[]> {
-  const q = `'${folderId}' in parents and trashed = false and mimeType contains 'image/'`;
-  const all: DriveImage[] = [];
+/** Đọc hết các trang kết quả của một truy vấn files.list (1000 file mỗi trang). */
+async function listAll<T>(op: string, q: string, fields: string, token: string, orderBy: string): Promise<T[]> {
+  const all: T[] = [];
   let pageToken: string | undefined;
   do {
-    const extra: Record<string, string> = { orderBy: "createdTime desc", pageSize: "1000", ...(pageToken ? { pageToken } : {}) };
-    const res = await call("list_images", listUrl(q, "nextPageToken,files(id,name,thumbnailLink,createdTime)", extra), { headers: bearer(token) });
-    const page = (await res.json()) as { files: DriveImage[]; nextPageToken?: string };
+    const extra: Record<string, string> = { orderBy, pageSize: "1000", ...(pageToken ? { pageToken } : {}) };
+    const res = await call(op, listUrl(q, `nextPageToken,files(${fields})`, extra), { headers: bearer(token) });
+    const page = (await res.json()) as { files: T[]; nextPageToken?: string };
     all.push(...page.files);
     pageToken = page.nextPageToken;
   } while (pageToken);
   return all;
+}
+
+/** Mọi ảnh (hoặc video) trong một thư mục, mới nhất trước. */
+export function listImages(token: string, folderId: string, mime: "image/" | "video/" = "image/"): Promise<DriveImage[]> {
+  const q = `'${folderId}' in parents and trashed = false and mimeType contains '${mime}'`;
+  const fields = mime === "video/" ? "id,name,thumbnailLink,createdTime,videoMediaMetadata(durationMillis)" : "id,name,thumbnailLink,createdTime";
+  return listAll(mime === "video/" ? "list_videos" : "list_images", q, fields, token, "createdTime desc");
+}
+
+/** Mọi thư mục trên Drive của tài khoản (để chọn thư mục video Reels cho từng Page), theo tên. */
+export function listFolders(token: string): Promise<{ id: string; name: string }[]> {
+  return listAll("list_folders", `mimeType = '${FOLDER_MIME}' and trashed = false`, "id,name", token, "name");
+}
+
+export type VideoStream = { body: ReadableStream<Uint8Array>; size: number };
+
+/** Mở video để đẩy thẳng sang Facebook theo luồng: không đọc cả file vào bộ nhớ Worker. */
+export async function openVideo(token: string, fileId: string): Promise<VideoStream> {
+  const res = await call("download_video", `${DRIVE}/files/${fileId}?alt=media`, { headers: bearer(token) }, VIDEO_TIMEOUT_MS);
+  const size = Number(res.headers.get("content-length"));
+  if (!res.body || !size) throw platformError("google", "download_video", "transient", res.status, null, "Drive không trả kích thước video");
+  return { body: res.body, size };
 }
 
 /** Upload kiểu multipart/related (metadata + nội dung trong một request) vào thư mục `folderId`. Trả về id của file. */
@@ -137,8 +158,10 @@ export async function downloadFile(token: string, fileId: string): Promise<Drive
 
 /** Ảnh nhỏ (khoảng 220px) do Drive tạo sẵn, để hiện trong danh sách. Drive chưa có ảnh nhỏ thì trả file gốc. */
 export async function downloadThumbnail(token: string, fileId: string): Promise<DriveFile> {
-  const meta = await call("thumbnail_link", `${DRIVE}/files/${fileId}?fields=thumbnailLink`, { headers: bearer(token) });
-  const { thumbnailLink } = (await meta.json()) as { thumbnailLink?: string };
+  const meta = await call("thumbnail_link", `${DRIVE}/files/${fileId}?fields=thumbnailLink,mimeType`, { headers: bearer(token) });
+  const { thumbnailLink, mimeType } = (await meta.json()) as { thumbnailLink?: string; mimeType?: string };
+  // Video chưa có ảnh nhỏ (Drive đang xử lý): không tải cả video về chỉ để làm ảnh xem trước.
+  if (!thumbnailLink && mimeType?.startsWith("video/")) throw platformError("google", "thumbnail", "permanent", 404, null, "video chưa có ảnh xem trước");
   if (!thumbnailLink) return downloadFile(token, fileId);
   const res = await call("thumbnail", thumbnailLink, { headers: bearer(token) });
   return { bytes: new Uint8Array(await res.arrayBuffer()), contentType: res.headers.get("content-type") ?? "image/jpeg" };

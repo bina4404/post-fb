@@ -1,3 +1,4 @@
+import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { getDb } from "../db/client";
 import { images } from "../db/schema";
@@ -56,7 +57,9 @@ mediaRoutes.get("/", async (c) => {
 mediaRoutes.get("/:key", async (c) => {
   const key = driveFileId.safeParse(c.req.param("key"));
   if (!key.success) throw fail(404, "không tìm thấy ảnh");
-  const read = c.req.query("thumb") ? downloadThumbnail : downloadFile;
+  // Video Reels: chỉ trả ảnh xem trước, không bao giờ tải cả video vào bộ nhớ Worker.
+  const media = await getDb(c.env).select({ kind: images.kind }).from(images).where(eq(images.driveFileId, key.data)).get();
+  const read = c.req.query("thumb") || media?.kind === "reel" ? downloadThumbnail : downloadFile;
   const file = await viaDrive(async () => read(await driveAccessToken(getDb(c.env), c.env, Date.now()), key.data));
   return new Response(file.bytes, { headers: { "content-type": file.contentType, "cache-control": "private, max-age=3600" } });
 });

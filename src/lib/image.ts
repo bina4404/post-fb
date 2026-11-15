@@ -1,6 +1,6 @@
 import { getDb } from "../db/client";
 import type { WorkerEnv } from "../env";
-import { downloadFile } from "../platforms/drive";
+import { downloadFile, openVideo, type VideoStream } from "../platforms/drive";
 import { PlatformError, PublishFailure, TIMEOUT_MS } from "../platforms/errors";
 import { driveAccessToken } from "./accounts";
 import { log } from "./log";
@@ -54,19 +54,22 @@ async function fromUrl(url: string): Promise<Image> {
   return { bytes, contentType };
 }
 
-async function fromDrive(env: WorkerEnv, fileId: string): Promise<Image> {
+async function fromDrive<T>(env: WorkerEnv, read: (token: string) => Promise<T>): Promise<T> {
   try {
-    return await downloadFile(await driveAccessToken(getDb(env), env, Date.now()), fileId);
+    return await read(await driveAccessToken(getDb(env), env, Date.now()));
   } catch (err) {
     // Lỗi token Google không phải lỗi token của Facebook: không được đánh dấu account đích cần kết nối lại.
     if (err instanceof PlatformError && err.kind === "auth") throw new PublishFailure("permanent", "Google Drive cần kết nối lại");
-    if (err instanceof PlatformError && err.status === 404) throw new PublishFailure("permanent", "ảnh trên Google Drive không còn");
+    if (err instanceof PlatformError && err.status === 404) throw new PublishFailure("permanent", "file trên Google Drive không còn");
     throw err;
   }
 }
 
 /** Ảnh của bài: từ Google Drive (upload) hoặc tải từ image_url (CSV). Không có ảnh thì trả null. */
 export async function loadImage(env: WorkerEnv, post: { imageKey: string | null; imageUrl: string | null }): Promise<Image | null> {
-  if (post.imageKey) return fromDrive(env, post.imageKey);
+  if (post.imageKey) return fromDrive(env, (token) => downloadFile(token, post.imageKey!));
   return post.imageUrl ? fromUrl(post.imageUrl) : null;
 }
+
+/** Video của bài Reels trên Google Drive, mở dạng luồng. */
+export const loadVideo = (env: WorkerEnv, fileId: string): Promise<VideoStream> => fromDrive(env, (token) => openVideo(token, fileId));

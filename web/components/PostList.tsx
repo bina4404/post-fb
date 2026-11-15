@@ -45,6 +45,7 @@ export function PostRow({ post, dest, onEdit, onChanged, selected, onSelect }: R
           <p className="text-xs text-gray-500">
             {post.scheduledAt ? `Lịch: ${formatTime(post.scheduledAt, tz)}` : "Nháp"}
             {post.targets.some((t) => t.idempotencyKey?.startsWith("auto:")) && <span className="ml-2 rounded bg-purple-100 px-1.5 text-purple-800">Tự động</span>}
+            {post.kind === "reel" && <span className="ml-2 rounded bg-pink-100 px-1.5 text-pink-800">Reels</span>}
           </p>
           <ul className="mt-1 flex flex-wrap gap-2 text-xs">
             {post.targets.map((t) => (

@@ -164,7 +164,7 @@ describe("library thumbnails", () => {
     const res = await api("/media/drive-file-123?thumb=1");
     expect(res.headers.get("content-type")).toBe("image/jpeg");
     expect(new Uint8Array(await res.arrayBuffer())).toEqual(new Uint8Array([1, 2]));
-    expect(new URL(calls[0]!.url).searchParams.get("fields")).toBe("thumbnailLink");
+    expect(new URL(calls[0]!.url).searchParams.get("fields")).toBe("thumbnailLink,mimeType");
     expect(calls[1]!.headers.get("authorization")).toBe("Bearer ya29.ACCESS");
   });
 });

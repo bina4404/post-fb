@@ -12,8 +12,9 @@ export const ANY_PAGE_GAP_MS = DAY_MS;
 /** Chọn ngẫu nhiên trong 5 ảnh lâu chưa dùng nhất: vừa ngẫu nhiên vừa xoay vòng đều kho ảnh. */
 const PICK_FROM_OLDEST = 5;
 
-export type PlanSlot = { accountId: number; at: number };
-export type PlanImage = { driveFileId: string; captions: string[] };
+export type MediaKind = "image" | "reel";
+export type PlanSlot = { accountId: number; at: number; kind?: MediaKind };
+export type PlanImage = { driveFileId: string; captions: string[]; kind?: MediaKind; folderId?: string | null };
 export type ImageUse = { imageKey: string; accountId: number; at: number };
 export type PlannedPost = PlanSlot & { imageKey: string; caption: string };
 
@@ -21,14 +22,14 @@ export type PlannedPost = PlanSlot & { imageKey: string; caption: string };
 export const autoKey = (s: PlanSlot) => `auto:${s.accountId}:${s.at}`;
 
 /** Mọi khung giờ (UTC ms) trong `days` ngày tới của các Page, theo giờ địa phương tại `tz`, tăng dần. */
-export function upcomingPageSlots(times: { accountId: number; minuteOfDay: number }[], now: number, tz: string, days = PLAN_DAYS): PlanSlot[] {
+export function upcomingPageSlots(times: { accountId: number; minuteOfDay: number; kind?: MediaKind }[], now: number, tz: string, days = PLAN_DAYS): PlanSlot[] {
   const today = localDate(now, tz);
   const slots: PlanSlot[] = [];
   for (let d = 0; d <= days; d++) {
     const date = new Date(Date.UTC(today.y, today.m - 1, today.d + d));
     for (const t of times) {
       const at = zonedToUtc(date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate(), Math.floor(t.minuteOfDay / 60), t.minuteOfDay % 60, tz);
-      if (at > now + PLAN_LEAD_MS && at <= now + days * DAY_MS) slots.push({ accountId: t.accountId, at });
+      if (at > now + PLAN_LEAD_MS && at <= now + days * DAY_MS) slots.push({ accountId: t.accountId, at, kind: t.kind ?? "image" });
     }
   }
   return slots.sort((a, b) => a.at - b.at || a.accountId - b.accountId);
@@ -42,8 +43,9 @@ const tooClose = (use: ImageUse, slot: PlanSlot) => {
 /**
  * Chọn ảnh cho từng khung giờ theo thứ tự thời gian. `uses` là các lần ảnh đã/sẽ đăng (kể cả bài thủ công).
  * Không có ảnh hợp lệ thì khung giờ đó vào `shortages`: thà bỏ trống còn hơn đăng lặp.
+ * `fits`: media nào dùng được cho khung giờ nào (ảnh cho giờ ảnh, video trong thư mục của Page cho giờ Reels).
  */
-export function planPosts(slots: PlanSlot[], images: PlanImage[], uses: ImageUse[], random = Math.random) {
+export function planPosts(slots: PlanSlot[], images: PlanImage[], uses: ImageUse[], random = Math.random, fits: (img: PlanImage, slot: PlanSlot) => boolean = () => true) {
   const usesByImage = new Map<string, ImageUse[]>();
   for (const u of uses) usesByImage.set(u.imageKey, [...(usesByImage.get(u.imageKey) ?? []), u]);
   const lastUse = (key: string) => Math.max(-Infinity, ...(usesByImage.get(key) ?? []).map((u) => u.at));
@@ -52,7 +54,7 @@ export function planPosts(slots: PlanSlot[], images: PlanImage[], uses: ImageUse
   const shortages: PlanSlot[] = [];
 
   for (const slot of slots) {
-    const candidates = ready.filter((img) => !(usesByImage.get(img.driveFileId) ?? []).some((u) => tooClose(u, slot)));
+    const candidates = ready.filter((img) => fits(img, slot) && !(usesByImage.get(img.driveFileId) ?? []).some((u) => tooClose(u, slot)));
     if (candidates.length === 0) {
       shortages.push(slot);
       continue;

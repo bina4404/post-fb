@@ -20,12 +20,19 @@ export const accounts = sqliteTable(
     enabled: integer("enabled", { mode: "boolean" }).notNull().default(false),
     // Đăng tự động từ kho ảnh cho Page này (giờ đăng ở bảng page_times).
     autoEnabled: integer("auto_enabled", { mode: "boolean" }).notNull().default(false),
+    // Thư mục video trên Google Drive dùng để đăng Reels tự động cho Page này (nhiều Page có thể dùng chung).
+    reelFolderId: text("reel_folder_id"),
+    reelFolderName: text("reel_folder_name"),
     // paused: Facebook chặn Page vì nghi lạm dụng (mã 368); kết nối lại Facebook để chạy tiếp. Enum chỉ ở TypeScript.
     status: text("status", { enum: ["ok", "needs_reauth", "paused"] }).notNull().default("ok"),
     updatedAt: integer("updated_at").notNull(),
   },
   (t) => [unique().on(t.platform, t.externalId)],
 );
+
+/** Loại bài: ảnh/chữ (/photos, /feed) hoặc Reels (/video_reels). Dùng cho bài, kho media và giờ đăng tự động. */
+export const mediaKinds = ["image", "reel"] as const;
+const kind = () => text("kind", { enum: mediaKinds }).notNull().default("image");
 
 // Không còn dùng (đã bỏ Pinterest). Giữ bảng và cột board_id để khỏi phải migration xoá dữ liệu.
 export const boards = sqliteTable(
@@ -48,6 +55,8 @@ export const posts = sqliteTable("posts", {
   link: text("link"),
   imageKey: text("image_key"),
   imageUrl: text("image_url"),
+  // reel: image_key là id video trên Drive.
+  kind: kind(),
   scheduledAt: integer("scheduled_at"),
   createdAt: integer("created_at").notNull(),
   updatedAt: integer("updated_at").notNull(),
@@ -113,11 +122,16 @@ export const appSettings = sqliteTable("app_settings", {
   updatedAt: integer("updated_at").notNull(),
 });
 
-/** Kho ảnh cho đăng tự động: ảnh trong thư mục post-fb trên Drive, kèm tối đa 10 caption (JSON array). */
+/**
+ * Kho media cho đăng tự động, kèm tối đa 10 caption (JSON array).
+ * kind=image: ảnh trong thư mục post-fb. kind=reel: video trong thư mục Reels của các Page (folder_id).
+ */
 export const images = sqliteTable("images", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   driveFileId: text("drive_file_id").notNull().unique(),
   name: text("name").notNull(),
+  kind: kind(),
+  folderId: text("folder_id"),
   captions: text("captions", { mode: "json" }).$type<string[]>().notNull().default([]),
   enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
   createdAt: integer("created_at").notNull(),
@@ -133,6 +147,8 @@ export const pageTimes = sqliteTable(
       .notNull()
       .references(() => accounts.id, { onDelete: "cascade" }),
     minuteOfDay: integer("minute_of_day").notNull(),
+    // Giờ đăng ảnh hay giờ đăng Reels. Một phút chỉ có một loại (unique theo Page + phút).
+    kind: kind(),
   },
   (t) => [unique().on(t.accountId, t.minuteOfDay)],
 );

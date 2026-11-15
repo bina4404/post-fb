@@ -44,11 +44,13 @@ export function platformError(
 }
 
 export const TIMEOUT_MS = 30_000;
+/** Tải/đẩy video Reels: lâu hơn nhiều, nhưng dưới 15 phút chạy tối đa của queue consumer. */
+export const VIDEO_TIMEOUT_MS = 10 * 60_000;
 
 /** fetch có timeout. Lỗi mạng hoặc timeout luôn là lỗi tạm thời. */
-export async function fetchWithTimeout(platform: PlatformName, op: string, url: string, init: RequestInit = {}) {
+export async function fetchWithTimeout(platform: PlatformName, op: string, url: string, init: RequestInit = {}, timeoutMs = TIMEOUT_MS) {
   try {
-    return await fetch(url, { ...init, signal: AbortSignal.timeout(TIMEOUT_MS) });
+    return await fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
   } catch (err) {
     throw platformError(platform, op, "transient", 0, null, (err as Error).name);
   }

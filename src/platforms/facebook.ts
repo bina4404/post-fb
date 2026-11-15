@@ -1,7 +1,8 @@
 // Adapter duy nhất gọi Meta Graph API. Tài liệu: developers.facebook.com/docs/pages-api, .../access-tokens/get-long-lived
 import type { WorkerEnv } from "../env";
 import { log } from "../lib/log";
-import { fetchWithTimeout, platformError, type ErrorKind } from "./errors";
+import type { VideoStream } from "./drive";
+import { fetchWithTimeout, platformError, VIDEO_TIMEOUT_MS, type ErrorKind } from "./errors";
 
 export type FacebookConfig = { appId: string; appSecret: string; version: string };
 export type FacebookPage = { id: string; name: string; accessToken: string };
@@ -30,8 +31,8 @@ function classify(status: number, error: GraphError | undefined): ErrorKind {
   return "permanent";
 }
 
-async function graph<T>(op: string, url: string, init?: RequestInit): Promise<T> {
-  const res = await fetchWithTimeout("facebook", op, url, init);
+async function graph<T>(op: string, url: string, init?: RequestInit, timeoutMs?: number): Promise<T> {
+  const res = await fetchWithTimeout("facebook", op, url, init, timeoutMs);
   const body = (await res.json().catch(() => ({}))) as T & { error?: GraphError };
   if (!res.ok || body.error) {
     const e = body.error;
@@ -107,4 +108,31 @@ export async function publishPost(cfg: FacebookConfig, pageId: string, pageToken
   }
   const body = new URLSearchParams({ message: post.caption, access_token: pageToken, ...(post.link ? { link: post.link } : {}) });
   return (await graph<{ id: string }>("publish_feed", `${base}/feed`, { method: "POST", body })).id;
+}
+
+/**
+ * Đăng Reels lên Page (developers.facebook.com/docs/video-api/guides/reels-publishing), 3 bước:
+ * start → nhận video_id + upload_url; đẩy video lên rupload (luồng, có file_size); finish với video_state=PUBLISHED.
+ * Facebook xử lý video bất đồng bộ sau bước finish. Trả về video_id.
+ */
+export async function publishReel(cfg: FacebookConfig, pageId: string, pageToken: string, reel: { caption: string; video: VideoStream }): Promise<string> {
+  const url = `https://graph.facebook.com/${cfg.version}/${pageId}/video_reels`;
+  const start = await graph<{ video_id: string; upload_url: string }>("reel_start", url, {
+    method: "POST",
+    body: new URLSearchParams({ upload_phase: "start", access_token: pageToken }),
+  });
+  // FixedLengthStream: gửi kèm Content-Length mà không đọc cả video vào bộ nhớ.
+  const { readable, writable } = new FixedLengthStream(reel.video.size);
+  // Lỗi giữa chừng (Drive ngắt) làm thiếu byte: fetch bên dưới tự báo lỗi, nên không cần chờ pipeTo.
+  void reel.video.body.pipeTo(writable).catch(() => undefined);
+  await graph("reel_upload", start.upload_url, {
+    method: "POST",
+    headers: { authorization: `OAuth ${pageToken}`, offset: "0", file_size: String(reel.video.size) },
+    body: readable,
+  }, VIDEO_TIMEOUT_MS);
+  await graph("reel_finish", url, {
+    method: "POST",
+    body: new URLSearchParams({ upload_phase: "finish", video_id: start.video_id, video_state: "PUBLISHED", description: reel.caption, access_token: pageToken }),
+  });
+  return start.video_id;
 }
