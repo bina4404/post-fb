@@ -16,6 +16,7 @@ import { scheduleRoutes } from "./routes/schedule";
 import { settingRoutes } from "./routes/settings";
 import { slotRoutes } from "./routes/slots";
 import { targetRoutes } from "./routes/targets";
+import { topicRoutes } from "./routes/topics";
 
 export const app = new Hono<AppEnv>().basePath("/api");
 
@@ -32,6 +33,7 @@ app.route("/slots", slotRoutes);
 app.route("/settings", settingRoutes);
 app.route("/images", imageRoutes);
 app.route("/auto", autoRoutes);
+app.route("/topics", topicRoutes);
 app.route("/accounts", accountRoutes);
 app.route("/oauth", oauthRoutes);
 app.route("/targets", targetRoutes);

@@ -15,7 +15,7 @@ export type Post = {
   link: string | null;
   imageKey: string | null;
   imageUrl: string | null;
-  kind?: "image" | "reel";
+  kind?: "image" | "reel" | "text";
   scheduledAt: number | null;
   createdAt: number;
   targets: Target[];

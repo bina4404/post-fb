@@ -38,7 +38,8 @@ async function send(env: WorkerEnv, db: Db, target: Target): Promise<string | nu
     if (!post.imageKey) throw new PublishFailure("permanent", "bài Reels thiếu video");
     return facebook.publishReel(facebook.facebookConfig(env), account.externalId, token, { caption: post.caption, video: await loadVideo(env, post.imageKey) });
   }
-  const image = await loadImage(env, post);
+  // Bài chữ: image_key chỉ là khoá trong kho (để chặn đăng trùng), không có file để tải.
+  const image = post.kind === "text" ? null : await loadImage(env, post);
   return facebook.publishPost(facebook.facebookConfig(env), account.externalId, token, { caption: post.caption, link: post.link, image });
 }
 

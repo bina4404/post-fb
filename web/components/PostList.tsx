@@ -39,7 +39,7 @@ export function PostRow({ post, dest, onEdit, onChanged, selected, onSelect }: R
     <div className={`space-y-2 rounded border bg-white p-3 ${selected ? "border-blue-500 ring-1 ring-blue-500" : ""}`}>
       <div className="flex gap-3">
         <input type="checkbox" className="mt-1 h-4 w-4" checked={selected} onChange={(e) => onSelect(e.target.checked)} aria-label="Chọn bài" />
-        {post.imageKey && <img src={`/api/media/${post.imageKey}?thumb=1`} alt="" loading="lazy" className="h-16 w-16 rounded object-cover" />}
+        {post.imageKey && post.kind !== "text" && <img src={`/api/media/${post.imageKey}?thumb=1`} alt="" loading="lazy" className="h-16 w-16 rounded object-cover" />}
         <div className="min-w-0 flex-1">
           <p className="line-clamp-2 whitespace-pre-line text-sm">{post.caption}</p>
           <p className="text-xs text-gray-500">

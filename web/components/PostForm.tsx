@@ -86,7 +86,8 @@ export function PostForm({ post, dest, onSaved, onCancel }: Props) {
       <Field label="Link">
         <input className={inputClass} type="url" value={link} onChange={(e) => setLink(e.target.value)} />
       </Field>
-      <ImagePicker value={image} onChange={setImage} />
+      {/* Bài chữ (hỏi fan) không có ảnh: image_key của nó chỉ là khoá trong kho nội dung. */}
+      {post?.kind !== "text" && <ImagePicker value={image} onChange={setImage} />}
       <PagePicker pages={pages} selected={pageIds} onChange={setPageIds} />
       {!post && (
         <Field label={`Giờ đăng (${TIME_ZONES.find((z) => z.id === tz)?.label}; để trống = nháp)`}>

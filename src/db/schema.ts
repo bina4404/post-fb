@@ -30,8 +30,11 @@ export const accounts = sqliteTable(
   (t) => [unique().on(t.platform, t.externalId)],
 );
 
-/** Loại bài: ảnh/chữ (/photos, /feed) hoặc Reels (/video_reels). Dùng cho bài, kho media và giờ đăng tự động. */
-export const mediaKinds = ["image", "reel"] as const;
+/**
+ * Loại bài: ảnh (/photos), Reels (/video_reels) hoặc bài chữ (/feed, ví dụ hỏi fan). Dùng cho bài, kho nội dung và giờ đăng tự động.
+ * Enum chỉ ở TypeScript nên thêm loại không cần migration.
+ */
+export const mediaKinds = ["image", "reel", "text"] as const;
 const kind = () => text("kind", { enum: mediaKinds }).notNull().default("image");
 
 // Không còn dùng (đã bỏ Pinterest). Giữ bảng và cột board_id để khỏi phải migration xoá dữ liệu.
@@ -49,6 +52,15 @@ export const boards = sqliteTable(
   (t) => [unique().on(t.accountId, t.externalId)],
 );
 
+/** Chủ đề nội dung (trụ cột). `brief` mô tả chủ đề cho AI viết caption. Không xoá dòng, chỉ tắt (bài và kho trỏ tới đây). */
+export const topics = sqliteTable("topics", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  brief: text("brief").notNull().default(""),
+  enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+  createdAt: integer("created_at").notNull(),
+});
+
 export const posts = sqliteTable("posts", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   caption: text("caption").notNull(),
@@ -57,6 +69,8 @@ export const posts = sqliteTable("posts", {
   imageUrl: text("image_url"),
   // reel: image_key là id video trên Drive.
   kind: kind(),
+  // Chủ đề lúc lên lịch (bài tự động), để đo hiệu quả theo chủ đề kể cả khi media đổi chủ đề sau đó.
+  topicId: integer("topic_id").references(() => topics.id),
   scheduledAt: integer("scheduled_at"),
   createdAt: integer("created_at").notNull(),
   updatedAt: integer("updated_at").notNull(),
@@ -88,6 +102,11 @@ export const postTargets = sqliteTable(
     externalPostId: text("external_post_id"),
     lastError: text("last_error"),
     needsAttention: integer("needs_attention", { mode: "boolean" }).notNull().default(false),
+    // Số liệu Facebook đo 7 ngày sau khi đăng (jobs/insights.ts). follows chỉ có với Reels.
+    views: integer("views"),
+    follows: integer("follows"),
+    statsAt: integer("stats_at"),
+    // Giãn cách đọc updated_at như giờ đăng: ghi số liệu KHÔNG được đổi cột này.
     updatedAt: integer("updated_at").notNull(),
   },
   (t) => [
@@ -123,8 +142,10 @@ export const appSettings = sqliteTable("app_settings", {
 });
 
 /**
- * Kho media cho đăng tự động, kèm tối đa 10 caption (JSON array).
+ * Kho nội dung cho đăng tự động, kèm tối đa 10 caption đã duyệt (JSON array).
  * kind=image: ảnh trong thư mục post-fb. kind=reel: video trong thư mục Reels của các Page (folder_id).
+ * kind=text: bài chữ, drive_file_id là khoá tự tạo "text:..." (không có file), nội dung bài là caption.
+ * suggestions: caption AI gợi ý, chờ duyệt; chỉ captions mới được đưa vào lịch.
  */
 export const images = sqliteTable("images", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -133,12 +154,16 @@ export const images = sqliteTable("images", {
   kind: kind(),
   folderId: text("folder_id"),
   captions: text("captions", { mode: "json" }).$type<string[]>().notNull().default([]),
+  topicId: integer("topic_id").references(() => topics.id),
+  suggestions: text("suggestions", { mode: "json" }).$type<string[]>().notNull().default([]),
+  // Lần AI gợi ý gần nhất: không gợi ý lại quá dày khi bạn bỏ hết gợi ý.
+  suggestedAt: integer("suggested_at"),
   enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
   createdAt: integer("created_at").notNull(),
   updatedAt: integer("updated_at").notNull(),
 });
 
-/** Giờ đăng tự động của từng Page, áp dụng mọi ngày, theo múi giờ của app (phút trong ngày 0–1439). */
+/** Giờ đăng tự động của từng Page theo múi giờ của app (phút trong ngày 0–1439), vào các ngày trong `days`. */
 export const pageTimes = sqliteTable(
   "page_times",
   {
@@ -149,6 +174,10 @@ export const pageTimes = sqliteTable(
     minuteOfDay: integer("minute_of_day").notNull(),
     // Giờ đăng ảnh hay giờ đăng Reels. Một phút chỉ có một loại (unique theo Page + phút).
     kind: kind(),
+    // Bitmask ngày trong tuần theo múi giờ của app: bit d = getUTCDay() d (0 = Chủ nhật). 127 = mọi ngày.
+    days: integer("days").notNull().default(127),
+    // Chủ đề cố định của giờ này; null = app tự chọn chủ đề theo hiệu quả đo được.
+    topicId: integer("topic_id").references(() => topics.id),
   },
   (t) => [unique().on(t.accountId, t.minuteOfDay)],
 );

@@ -5,6 +5,8 @@ export type Secrets = {
   FB_APP_SECRET: string;
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
+  // Không bắt buộc: thiếu thì tắt phần AI viết caption, mọi thứ khác vẫn chạy.
+  ANTHROPIC_API_KEY?: string;
   DEV_AUTH_BYPASS?: string;
 };
 

@@ -15,7 +15,11 @@ it("first migration creates every table and enforces idempotency keys", async ()
     "post_targets",
     "posts",
     "schedule_slots",
+    "topics",
   ]);
+  // Migration 0005 tạo sẵn 5 chủ đề của báo cáo phân tích page.
+  const topics = await env.DB.prepare("SELECT count(*) AS n FROM topics").first<{ n: number }>();
+  expect(topics!.n).toBe(5);
 
   const now = Date.now();
   await env.DB.batch([

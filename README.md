@@ -22,7 +22,7 @@ Muốn sửa UI có hot reload thì chạy thêm `npm run dev:web` (Vite ở htt
 |---|---|
 | `npm run typecheck` | sinh kiểu `Env` từ `wrangler.jsonc`, rồi `tsc` cho Worker và cho web |
 | `npm run lint` | ESLint |
-| `npm test` | Vitest chạy trong runtime Workers (`@cloudflare/vitest-plugin`), D1 local có migration |
+| `npm test` | Vitest chạy trong runtime Workers (`@cloudflare/vitest-plugin`), D1 local có migration. Cần `dist/` (chạy `npm run build` trước) |
 | `npm run db:generate` | sửa `src/db/schema.ts` xong thì chạy lệnh này để sinh migration mới trong `migrations/` |
 
 ## Cấu trúc

@@ -26,6 +26,7 @@ Làm theo thứ tự. Mọi lệnh có `--remote`, `wrangler deploy` hay `wrangl
 - [ ] developers.facebook.com → **Create App** → use case *Manage everything on your Page*.
 - [ ] Facebook Login → Settings → Valid OAuth Redirect URIs: `https://tools.new2h.com/api/oauth/facebook/callback` (khớp tuyệt đối).
 - [ ] App roles: thêm từng người dùng làm Admin/Developer/Tester. Với người có vai trò trong app, quyền `pages_show_list`, `pages_read_engagement`, `pages_manage_posts`, `business_management` dùng được ở Standard Access, **không cần App Review**.
+- [ ] Use cases → *Manage everything on your Page* → **Customize** → thêm quyền **`read_insights`** và **`pages_manage_engagement`** (từ 16/11/2026: app đọc lượt xem của bài 7 ngày sau khi đăng để chọn chủ đề hiệu quả). Sau khi thêm, vào tab **Tài khoản → Kết nối Facebook** lại để cấp quyền mới; chưa cấp thì bài vẫn đăng bình thường, chỉ không đo được.
 - [ ] Use cases → *Manage everything on your Page* → **Customize** → thêm quyền **`business_management`**. Thiếu quyền này, Facebook không liệt kê các Page bạn quản lý qua Business Portfolio (Meta Business Suite) và app chỉ thấy 0–1 Page.
 - [ ] Chỉ khi cần người ngoài vai trò app dùng: Business Verification + App Review cho 3 quyền trên.
 - [ ] Ghi lại App ID và App Secret.
@@ -50,6 +51,7 @@ npx wrangler secret put FB_APP_ID
 npx wrangler secret put FB_APP_SECRET
 npx wrangler secret put GOOGLE_CLIENT_ID
 npx wrangler secret put GOOGLE_CLIENT_SECRET
+npx wrangler secret put ANTHROPIC_API_KEY   # không bắt buộc: bật AI viết caption (tạo key ở console.anthropic.com)
 ```
 
 - [ ] **Không bao giờ** đặt `DEV_AUTH_BYPASS` trên production. Code chỉ cho bypass khi hostname là `localhost`, đây là lớp bảo vệ thứ hai.

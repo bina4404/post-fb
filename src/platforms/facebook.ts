@@ -14,7 +14,8 @@ export const facebookConfig = (env: WorkerEnv): FacebookConfig => ({
 });
 
 // business_management: không có quyền này, /me/accounts không trả về Page mà người dùng quản lý qua Business Portfolio.
-export const FACEBOOK_SCOPES = ["pages_show_list", "pages_read_engagement", "pages_manage_posts", "business_management"];
+// read_insights (+ pages_manage_engagement cho /video_insights): đọc lượt xem của bài để đo hiệu quả theo chủ đề.
+export const FACEBOOK_SCOPES = ["pages_show_list", "pages_read_engagement", "pages_manage_posts", "business_management", "read_insights", "pages_manage_engagement"];
 
 type GraphError = { message?: string; code?: number; is_transient?: boolean };
 // Mã lỗi Graph API: lỗi tạm thời của dịch vụ; vượt giới hạn gọi (app/user/Page/BUC); bị chặn vì nghi lạm dụng.
@@ -135,4 +136,28 @@ export async function publishReel(cfg: FacebookConfig, pageId: string, pageToken
     body: new URLSearchParams({ upload_phase: "finish", video_id: start.video_id, video_state: "PUBLISHED", description: reel.caption, access_token: pageToken }),
   });
   return start.video_id;
+}
+
+type InsightsBody = { data?: { name: string; values?: { value?: unknown }[] }[] };
+const metric = (body: InsightsBody, name: string) => {
+  const v = body.data?.find((d) => d.name === name)?.values?.[0]?.value;
+  return typeof v === "number" ? v : null;
+};
+export type PostStats = { views: number; follows: number | null };
+
+/**
+ * Lượt xem trọn đời của một bài (developers.facebook.com/docs/platforminsights/page, .../video/video_insights).
+ * Reels: GET /{video-id}/video_insights, `blue_reels_play_count` (không tính xem lại) + `post_video_followers`.
+ * Ảnh/chữ: GET /{post-id}/insights, `post_media_view` (thay post_impressions, bị bỏ từ 15/11/2025); không có số theo dõi theo bài.
+ * Thiếu quyền read_insights thì Facebook trả dữ liệu rỗng thay vì lỗi: trả null (chưa đo được).
+ */
+export async function postInsights(cfg: FacebookConfig, pageToken: string, externalId: string, kind: "image" | "reel" | "text"): Promise<PostStats | null> {
+  if (kind === "reel") {
+    const body = await graph<InsightsBody>("reel_insights", graphUrl(cfg, `${externalId}/video_insights`, { metric: "blue_reels_play_count,post_video_followers", access_token: pageToken }));
+    const views = metric(body, "blue_reels_play_count");
+    return views === null ? null : { views, follows: metric(body, "post_video_followers") };
+  }
+  const body = await graph<InsightsBody>("post_insights", graphUrl(cfg, `${externalId}/insights`, { metric: "post_media_view", access_token: pageToken }));
+  const views = metric(body, "post_media_view");
+  return views === null ? null : { views, follows: null };
 }

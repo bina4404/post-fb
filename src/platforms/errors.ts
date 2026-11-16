@@ -5,7 +5,7 @@ import { log } from "../lib/log";
  * blocked: nền tảng chặn vì nghi lạm dụng, phải dừng hẳn. permanent: sửa dữ liệu/quyền mới hết.
  */
 export type ErrorKind = "transient" | "rate_limited" | "auth" | "blocked" | "permanent";
-export type PlatformName = "facebook" | "google";
+export type PlatformName = "facebook" | "google" | "anthropic";
 
 /** Lỗi khi đăng bài mà publisher biết cách xử lý (retry hoặc dừng). */
 export class PublishFailure extends Error {

@@ -13,6 +13,7 @@
     "db:migrate:local": "wrangler d1 migrations apply post-fb --local"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.8.0",
     "drizzle-orm": "^0.45.4",
     "hono": "^4.13.16",
     "jose": "^6.2.15",
