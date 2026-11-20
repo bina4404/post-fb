@@ -18,7 +18,7 @@ const MAX_CAPTIONS = 10;
 const ACCEPTED = ["image/jpeg", "image/png"];
 type Filter = "all" | "missing" | "off";
 
-function ImageCard({ image, folderName, onChanged }: { image: BankImage; folderName?: string; onChanged: (message?: string) => void }) {
+function ImageCard({ image, onChanged }: { image: BankImage; onChanged: (message?: string) => void }) {
   const tz = useTz();
   const [captions, setCaptions] = useState(() => Array.from({ length: MAX_CAPTIONS }, (_, i) => image.captions[i] ?? ""));
   const [error, setError] = useState<string | null>(null);
@@ -44,7 +44,6 @@ function ImageCard({ image, folderName, onChanged }: { image: BankImage; folderN
         <img src={`/api/media/${image.driveFileId}?thumb=1`} alt={image.name} loading="lazy" className="h-20 w-20 shrink-0 rounded object-cover" />
         <div className="min-w-0 flex-1 space-y-1">
           <p className="truncate font-medium" title={image.name}>{image.name}</p>
-          {image.kind === "reel" && <p className="truncate text-xs text-gray-500">Thư mục: {folderName || "không còn Page nào dùng"}</p>}
           <p className={filled ? "text-gray-600" : "font-medium text-amber-700"}>{filled}/{MAX_CAPTIONS} caption{filled ? "" : " (chưa dùng được)"}</p>
           <p className="text-xs text-gray-500">
             {image.lastUsedAt ? `Đăng gần nhất: ${formatTime(image.lastUsedAt, tz)}` : "Chưa đăng lần nào"}
@@ -112,10 +111,11 @@ function Uploader({ onDone }: { onDone: (message: string) => void }) {
   );
 }
 
-type BankProps = { kind: "image" | "reel"; folderNames?: Map<string, string>; onChanged: () => void };
+export type FolderInfo = { name: string; pages: string[] };
+type BankProps = { kind: "image" | "reel"; folders?: Map<string, FolderInfo>; onChanged: () => void };
 
 /** Kho ảnh (thư mục post-fb) hoặc kho video Reels (thư mục video của các Page). */
-export function ImageBank({ kind, folderNames, onChanged }: BankProps) {
+export function ImageBank({ kind, folders, onChanged }: BankProps) {
   const reels = kind === "reel";
   const noun = reels ? "video" : "ảnh";
   const [list, setList] = useState<BankImage[] | null>(null);
@@ -159,12 +159,33 @@ export function ImageBank({ kind, folderNames, onChanged }: BankProps) {
           </button>
         ))}
       </div>
-      <ul className="grid gap-2 sm:grid-cols-2">
-        {shown.map((img) => (
-          <ImageCard key={`${img.id}-${img.captions.length}-${img.enabled}`} image={img} folderName={img.folderId ? folderNames?.get(img.folderId) : undefined} onChanged={changed} />
-        ))}
-      </ul>
+      {groupByFolder(shown, kind, folders).map((g) => (
+        <details key={g.id} open className="rounded border bg-gray-50 p-2">
+          <summary className="cursor-pointer text-sm">
+            <span className="font-medium">📁 {g.name}</span> <span className="text-gray-500">({g.items.length} {noun}{g.pages ? ` · dùng cho: ${g.pages}` : ""})</span>
+          </summary>
+          <ul className="mt-2 grid gap-2 sm:grid-cols-2">
+            {g.items.map((img) => <ImageCard key={`${img.id}-${img.captions.length}-${img.enabled}`} image={img} onChanged={changed} />)}
+          </ul>
+        </details>
+      ))}
       {list && shown.length === 0 && <p className="text-sm text-gray-500">Không có {noun} nào.</p>}
     </section>
   );
+}
+
+/** Chia kho theo thư mục Drive: ảnh luôn ở thư mục post-fb; video theo thư mục Reels của các Page, xếp theo tên. */
+function groupByFolder(items: BankImage[], kind: "image" | "reel", folders?: Map<string, FolderInfo>) {
+  const groups = new Map<string, BankImage[]>();
+  for (const img of items) {
+    const id = kind === "reel" ? (img.folderId ?? "") : "post-fb";
+    groups.set(id, [...(groups.get(id) ?? []), img]);
+  }
+  return [...groups]
+    .map(([id, list]) => {
+      const info = folders?.get(id);
+      const name = kind === "image" ? "post-fb" : (info?.name ?? "Thư mục không còn Page nào dùng");
+      return { id, name, pages: info?.pages.join(", "), items: list };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
 }

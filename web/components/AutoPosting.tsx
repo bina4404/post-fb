@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api";
 import { TIME_ZONES, useTz } from "../time";
-import { ImageBank } from "./ImageBank";
+import { ImageBank, type FolderInfo } from "./ImageBank";
 import { Button, ErrorText, inputClass } from "./ui";
 
 type AutoPage = {
@@ -115,7 +115,13 @@ export function AutoPosting() {
   useEffect(() => void load(), [load]);
   // Chưa kết nối Google Drive thì không có danh sách thư mục; lỗi hiện ở thông báo chung.
   useEffect(() => void api<Folder[]>("/auto/folders").then(setFolders, (e: Error) => setMessage(`Không đọc được thư mục Drive: ${e.message}`)), []);
-  const folderNames = new Map((data?.pages ?? []).filter((p) => p.reelFolderId).map((p) => [p.reelFolderId!, p.reelFolderName ?? ""]));
+  // Thư mục video → tên thư mục và các Page đang dùng nó (nhiều Page có thể dùng chung một thư mục).
+  const reelFolders = new Map<string, FolderInfo>();
+  for (const p of data?.pages ?? []) {
+    if (!p.reelFolderId) continue;
+    const f = reelFolders.get(p.reelFolderId) ?? { name: p.reelFolderName ?? p.reelFolderId, pages: [] };
+    reelFolders.set(p.reelFolderId, { ...f, pages: [...f.pages, p.name] });
+  }
 
   async function planNow() {
     try {
@@ -163,7 +169,7 @@ export function AutoPosting() {
         {data && data.pages.length === 0 && <p className="text-sm text-gray-500">Chưa có Page nào được bật (tab Tài khoản).</p>}
       </section>
       <ImageBank kind="image" onChanged={() => void load()} />
-      <ImageBank kind="reel" folderNames={folderNames} onChanged={() => void load()} />
+      <ImageBank kind="reel" folders={reelFolders} onChanged={() => void load()} />
     </section>
   );
 }
