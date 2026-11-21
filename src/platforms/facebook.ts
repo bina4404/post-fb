@@ -202,25 +202,27 @@ export async function topPosts(cfg: FacebookConfig, pageId: string, pageToken: s
     permalink_url?: string;
     full_picture?: string;
     shares?: { count: number };
-    reactions?: { summary?: { total_count: number } };
-    comments?: { summary?: { total_count: number } };
     insights?: { data: { name: string; values: { value: unknown }[] }[] };
   };
+  // Cảm xúc/bình luận lấy từ insights của bài (quyền read_insights). Trường reactions/comments của bài
+  // đòi thêm quyền pages_read_user_content, nên không dùng.
   const fields = [
     "id,message,created_time,permalink_url,full_picture,shares",
-    "reactions.summary(total_count).limit(0)",
-    "comments.summary(total_count).limit(0)",
-    "insights.metric(post_media_view,post_total_media_view_unique,post_clicks)",
+    "insights.metric(post_media_view,post_total_media_view_unique,post_clicks,post_reactions_by_type_total,post_activity_by_action_type)",
   ].join(",");
   const res = await graph<{ data: Raw[] }>(
     "top_posts",
     graphUrl(cfg, `${pageId}/published_posts`, { fields, since: unix(since), until: unix(until), limit: "100", access_token: pageToken }),
   );
   return res.data.map((p) => {
+    const raw = (name: string) => p.insights?.data.find((m) => m.name === name)?.values[0]?.value;
     const metric = (name: string) => {
-      const v = p.insights?.data.find((m) => m.name === name)?.values[0]?.value;
+      const v = raw(name);
       return typeof v === "number" ? v : 0;
     };
+    // Chỉ số dạng { loại: số }, ví dụ cảm xúc { like: 3, love: 1 } hoặc hoạt động { comment: 2, share: 1 }.
+    const byType = (name: string) => (raw(name) ?? {}) as Record<string, number>;
+    const activity = byType("post_activity_by_action_type");
     return {
       id: p.id,
       message: p.message ?? "",
@@ -230,9 +232,9 @@ export async function topPosts(cfg: FacebookConfig, pageId: string, pageToken: s
       views: metric("post_media_view"),
       viewers: metric("post_total_media_view_unique"),
       clicks: metric("post_clicks"),
-      reactions: p.reactions?.summary?.total_count ?? 0,
-      comments: p.comments?.summary?.total_count ?? 0,
-      shares: p.shares?.count ?? 0,
+      reactions: Object.values(byType("post_reactions_by_type_total")).reduce((a, b) => a + b, 0),
+      comments: activity.comment ?? 0,
+      shares: p.shares?.count ?? activity.share ?? 0,
     };
   });
 }

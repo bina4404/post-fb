@@ -39,7 +39,7 @@ describe("Page insights", () => {
   });
 
   it("returns daily series dated to the counted day, plus posts with views and engagement", async () => {
-    mockFetch({
+    const calls = mockFetch({
       [`GET ${GRAPH}/page1`]: () => Response.json({ followers_count: 1200 }),
       [`GET ${GRAPH}/page1/insights`]: () => Response.json({ data: [day("page_media_view", [10, 20])] }),
       [`GET ${GRAPH}/page1/published_posts`]: () =>
@@ -50,15 +50,22 @@ describe("Page insights", () => {
               message: "Hello",
               created_time: "2026-11-02T10:00:00+0000",
               shares: { count: 2 },
-              reactions: { summary: { total_count: 9 } },
-              comments: { summary: { total_count: 1 } },
-              insights: { data: [{ name: "post_media_view", values: [{ value: 500 }] }] },
+              insights: {
+                data: [
+                  { name: "post_media_view", values: [{ value: 500 }] },
+                  { name: "post_reactions_by_type_total", values: [{ value: { like: 7, love: 2 } }] },
+                  { name: "post_activity_by_action_type", values: [{ value: { comment: 1, share: 2 } }] },
+                ],
+              },
             },
           ],
         }),
     });
     const res = await api("/insights/1?days=28");
     expect(res.status).toBe(200);
+    // Không xin trường reactions/comments của bài: chúng đòi quyền pages_read_user_content.
+    const postsUrl = new URL(calls.find((c) => c.url.includes("published_posts"))!.url);
+    expect(postsUrl.searchParams.get("fields")).not.toMatch(/reactions\.|comments\./);
     const body = (await res.json()) as { daily: Record<string, { date: string; value: number }[]>; posts: unknown[] };
     expect(body.daily.page_media_view![0]).toEqual({ date: "2026-11-01", value: 10 });
     expect(body.posts[0]).toMatchObject({ id: "page1_1", views: 500, reactions: 9, comments: 1, shares: 2, clicks: 0 });

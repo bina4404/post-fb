@@ -35,6 +35,8 @@ async function explain(env: WorkerEnv, token: string, err: unknown): Promise<str
   if (scopes && !scopes.includes("read_insights")) {
     return `token của Page chưa có quyền read_insights: ở tab Tài khoản bấm Kết nối Facebook, chọn lại đủ các Page và bật quyền xem thống kê (Facebook: ${err.message})`;
   }
+  // Facebook đã nói rõ thiếu quyền/tính năng nào thì chỉ cần câu gốc, không đoán thêm.
+  if (/permission|feature/i.test(err.message)) return `Facebook từ chối xem thống kê: ${err.message}`;
   const known = scopes ? "Token đã có quyền read_insights, nên thường do " : "Thường do ";
   return `Facebook từ chối xem thống kê: ${err.message}. ${known}Page dưới 100 lượt thích, hoặc tài khoản của bạn không có quyền phân tích (xem thông tin chi tiết) trên Page này`;
 }
