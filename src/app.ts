@@ -7,6 +7,7 @@ import { sameOriginWrites } from "./middleware/same-origin";
 import { accountRoutes } from "./routes/accounts";
 import { autoRoutes } from "./routes/auto";
 import { imageRoutes } from "./routes/images";
+import { insightRoutes } from "./routes/insights";
 import { bulkRoutes } from "./routes/bulk";
 import { importRoutes } from "./routes/import";
 import { mediaRoutes } from "./routes/media";
@@ -35,6 +36,7 @@ app.route("/auto", autoRoutes);
 app.route("/accounts", accountRoutes);
 app.route("/oauth", oauthRoutes);
 app.route("/targets", targetRoutes);
+app.route("/insights", insightRoutes);
 
 app.notFound((c) => c.json({ error: "not found" }, 404));
 

@@ -14,7 +14,8 @@ export const facebookConfig = (env: WorkerEnv): FacebookConfig => ({
 });
 
 // business_management: không có quyền này, /me/accounts không trả về Page mà người dùng quản lý qua Business Portfolio.
-export const FACEBOOK_SCOPES = ["pages_show_list", "pages_read_engagement", "pages_manage_posts", "business_management"];
+// read_insights: xem thống kê Page và bài (tab Thống kê).
+export const FACEBOOK_SCOPES = ["pages_show_list", "pages_read_engagement", "pages_manage_posts", "business_management", "read_insights"];
 
 type GraphError = { message?: string; code?: number; is_transient?: boolean };
 // Mã lỗi Graph API: lỗi tạm thời của dịch vụ; vượt giới hạn gọi (app/user/Page/BUC); bị chặn vì nghi lạm dụng.
@@ -135,4 +136,101 @@ export async function publishReel(cfg: FacebookConfig, pageId: string, pageToken
     body: new URLSearchParams({ upload_phase: "finish", video_id: start.video_id, video_state: "PUBLISHED", description: reel.caption, access_token: pageToken }),
   });
   return start.video_id;
+}
+
+// Chỉ số Page còn dùng được sau đợt Meta bỏ chỉ số (6/2026), đều là số đếm theo ngày nên cộng dồn được.
+export const PAGE_METRICS = [
+  "page_media_view",
+  "page_post_engagements",
+  "page_daily_follows_unique",
+  "page_daily_unfollows_unique",
+  "page_video_views",
+  "page_views_total",
+] as const;
+export type PageMetric = (typeof PAGE_METRICS)[number];
+export type DailySeries = Partial<Record<PageMetric, { date: string; value: number }[]>>;
+
+const DAY_MS = 86_400_000;
+const unix = (ms: number) => String(Math.floor(ms / 1000));
+
+/** Số liệu theo ngày của Page (cần quyền read_insights). Facebook cho xem tối đa 90 ngày mỗi lần. */
+export async function pageInsights(cfg: FacebookConfig, pageId: string, pageToken: string, since: number, until: number): Promise<DailySeries> {
+  type Row = { name: PageMetric; period: string; values: { value: unknown; end_time: string }[] };
+  const res = await graph<{ data: Row[] }>(
+    "page_insights",
+    graphUrl(cfg, `${pageId}/insights`, { metric: PAGE_METRICS.join(","), period: "day", since: unix(since), until: unix(until), access_token: pageToken }),
+  );
+  const out: DailySeries = {};
+  // end_time là mốc cuối ngày được đếm, nên ngày của số liệu là end_time trừ 1 ngày.
+  for (const m of res.data.filter((r) => r.period === "day")) {
+    out[m.name] = m.values.map((v) => ({ date: new Date(Date.parse(v.end_time) - DAY_MS).toISOString().slice(0, 10), value: typeof v.value === "number" ? v.value : 0 }));
+  }
+  return out;
+}
+
+/** Tổng số người theo dõi Page hiện tại. */
+export async function pageFollowers(cfg: FacebookConfig, pageId: string, pageToken: string): Promise<number | null> {
+  const res = await graph<{ followers_count?: number; fan_count?: number }>("page_profile", graphUrl(cfg, pageId, { fields: "followers_count,fan_count", access_token: pageToken }));
+  return res.followers_count ?? res.fan_count ?? null;
+}
+
+export type TopPost = {
+  id: string;
+  message: string;
+  createdTime: string;
+  permalink: string | null;
+  picture: string | null;
+  views: number;
+  viewers: number;
+  clicks: number;
+  reactions: number;
+  comments: number;
+  shares: number;
+};
+
+/**
+ * Bài Page đã đăng trong khoảng thời gian, kèm lượt xem/tương tác để xếp hạng nội dung hàng đầu.
+ * shortcut: chỉ lấy 100 bài mới nhất trong khoảng, không đọc trang tiếp; tăng nếu Page đăng hơn 100 bài/khoảng.
+ */
+export async function topPosts(cfg: FacebookConfig, pageId: string, pageToken: string, since: number, until: number): Promise<TopPost[]> {
+  type Raw = {
+    id: string;
+    message?: string;
+    created_time: string;
+    permalink_url?: string;
+    full_picture?: string;
+    shares?: { count: number };
+    reactions?: { summary?: { total_count: number } };
+    comments?: { summary?: { total_count: number } };
+    insights?: { data: { name: string; values: { value: unknown }[] }[] };
+  };
+  const fields = [
+    "id,message,created_time,permalink_url,full_picture,shares",
+    "reactions.summary(total_count).limit(0)",
+    "comments.summary(total_count).limit(0)",
+    "insights.metric(post_media_view,post_total_media_view_unique,post_clicks)",
+  ].join(",");
+  const res = await graph<{ data: Raw[] }>(
+    "top_posts",
+    graphUrl(cfg, `${pageId}/published_posts`, { fields, since: unix(since), until: unix(until), limit: "100", access_token: pageToken }),
+  );
+  return res.data.map((p) => {
+    const metric = (name: string) => {
+      const v = p.insights?.data.find((m) => m.name === name)?.values[0]?.value;
+      return typeof v === "number" ? v : 0;
+    };
+    return {
+      id: p.id,
+      message: p.message ?? "",
+      createdTime: p.created_time,
+      permalink: p.permalink_url ?? null,
+      picture: p.full_picture ?? null,
+      views: metric("post_media_view"),
+      viewers: metric("post_total_media_view_unique"),
+      clicks: metric("post_clicks"),
+      reactions: p.reactions?.summary?.total_count ?? 0,
+      comments: p.comments?.summary?.total_count ?? 0,
+      shares: p.shares?.count ?? 0,
+    };
+  });
 }

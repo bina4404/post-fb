@@ -4,13 +4,14 @@ import { Accounts } from "./components/Accounts";
 import { AutoPosting } from "./components/AutoPosting";
 import { Dashboard } from "./components/Dashboard";
 import { ImportCsv } from "./components/ImportCsv";
+import { Insights } from "./components/Insights";
 import { PostForm } from "./components/PostForm";
 import { Library } from "./components/Library";
 import { Slots } from "./components/Slots";
 import { Button, ErrorText, inputClass } from "./components/ui";
 import { loadTz, saveTz, TIME_ZONES, TzContext, type TimeZone } from "./time";
 
-const TABS = { dashboard: "Lịch đăng", library: "Thư viện", import: "Import CSV", auto: "Tự động", slots: "Khung giờ", accounts: "Tài khoản" } as const;
+const TABS = { dashboard: "Lịch đăng", library: "Thư viện", import: "Import CSV", auto: "Tự động", insights: "Thống kê", slots: "Khung giờ", accounts: "Tài khoản" } as const;
 type Tab = keyof typeof TABS;
 
 function useHashTab(): Tab {
@@ -93,6 +94,7 @@ export function App() {
       {tab === "dashboard" && <Dashboard />}
       {tab === "import" && <ImportCsv onImported={reload} />}
       {tab === "auto" && <AutoPosting />}
+      {tab === "insights" && <Insights />}
       {tab === "slots" && <Slots />}
       {tab === "accounts" && <Accounts dest={dest} onChanged={reload} />}
     </main>
