@@ -25,12 +25,14 @@ describe("Page insights", () => {
       [`GET ${GRAPH}/page1/insights`]: () => Response.json({ data: [day("page_media_view", [10, 20]), day("page_post_engagements", [3, 4])] }),
       [`GET ${GRAPH}/page2`]: () => Response.json({ followers_count: 5 }),
       [`GET ${GRAPH}/page2/insights`]: () => Response.json({ error: { message: "(#10) Requires read_insights", code: 10 } }, { status: 403 }),
+      [`GET ${GRAPH}/debug_token`]: () => Response.json({ data: { scopes: ["pages_show_list", "pages_read_engagement"] } }),
     });
     const res = await api("/insights?days=7");
     const body = (await res.json()) as { pages: { id: number; followers: number | null; totals: Record<string, number> | null; error: string | null }[] };
     const [p1, p2] = body.pages.sort((a, b) => a.id - b.id);
     expect(p1).toMatchObject({ followers: 1200, totals: { page_media_view: 30, page_post_engagements: 7, page_video_views: 0 }, error: null });
-    expect(p2!.error).toContain("Kết nối Facebook");
+    expect(p2!.error).toContain("chưa có quyền read_insights");
+    expect(p2!.error).toContain("(#10) Requires read_insights");
     const insights = new URL(calls.find((c) => c.url.includes("page1/insights"))!.url);
     expect(Number(insights.searchParams.get("until")) - Number(insights.searchParams.get("since"))).toBe(7 * 86_400);
     expect(insights.searchParams.get("period")).toBe("day");
@@ -64,5 +66,20 @@ describe("Page insights", () => {
 
   it("rejects an unsupported range", async () => {
     expect((await api("/insights?days=365")).status).toBe(400);
+  });
+});
+
+describe("diagnosing a refused insights call", () => {
+  it("says the Page is not eligible (not 'reconnect') when the token already has read_insights", async () => {
+    mockFetch({
+      [`GET ${GRAPH}/page1`]: () => Response.json({ followers_count: 40 }),
+      [`GET ${GRAPH}/page1/insights`]: () => Response.json({ error: { message: "(#10) Not enough viewers", code: 10 } }, { status: 403 }),
+      [`GET ${GRAPH}/debug_token`]: () => Response.json({ data: { scopes: ["read_insights", "pages_read_engagement"] } }),
+    });
+    const res = await api("/insights/1?days=7");
+    expect(res.status).toBe(400);
+    const { error } = (await res.json()) as { error: string };
+    expect(error).toContain("Token đã có quyền read_insights");
+    expect(error).toContain("(#10) Not enough viewers");
   });
 });

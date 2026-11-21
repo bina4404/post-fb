@@ -52,6 +52,8 @@ export function authorizeUrl(cfg: FacebookConfig, redirectUri: string, state: st
     state,
     scope: FACEBOOK_SCOPES.join(","),
     response_type: "code",
+    // Hỏi lại cả các quyền người dùng từng bỏ qua (ví dụ read_insights thêm sau), thay vì im lặng giữ quyền cũ.
+    auth_type: "rerequest",
   });
   return `https://www.facebook.com/${cfg.version}/dialog/oauth?${params}`;
 }
@@ -233,4 +235,13 @@ export async function topPosts(cfg: FacebookConfig, pageId: string, pageToken: s
       shares: p.shares?.count ?? 0,
     };
   });
+}
+
+/** Các quyền thực sự có trong một token (dùng app token để hỏi debug_token). Để chẩn đoán lỗi thiếu quyền. */
+export async function tokenScopes(cfg: FacebookConfig, token: string): Promise<string[]> {
+  const res = await graph<{ data: { scopes?: string[] } }>(
+    "debug_token",
+    graphUrl(cfg, "debug_token", { input_token: token, access_token: `${cfg.appId}|${cfg.appSecret}` }),
+  );
+  return res.data.scopes ?? [];
 }

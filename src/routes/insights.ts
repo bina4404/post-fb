@@ -24,23 +24,28 @@ function range(c: { req: { query: () => Record<string, string> } }) {
   return { since: until - Number(q.data.days) * DAY_MS, until };
 }
 
-/** Lỗi Facebook thành câu dễ hiểu; thiếu quyền (mã 10/200) thì hướng dẫn kết nối lại để cấp read_insights. */
-function explain(err: unknown): string {
-  if (err instanceof PlatformError && (err.code === 10 || err.code === 200)) {
-    return "chưa có quyền xem thống kê: bấm Kết nối Facebook ở tab Tài khoản để cấp thêm quyền (Page cần ≥100 lượt thích và bạn có quyền phân tích Page)";
+/**
+ * Lỗi Facebook thành câu dễ hiểu, luôn kèm lỗi gốc. Thiếu quyền (mã 10/200): hỏi debug_token xem token của Page
+ * đã có read_insights chưa, để phân biệt "cần kết nối lại" với "Page/tài khoản không đủ điều kiện".
+ */
+async function explain(env: WorkerEnv, token: string, err: unknown): Promise<string> {
+  if (!(err instanceof PublishFailure)) throw err;
+  if (!(err instanceof PlatformError && (err.code === 10 || err.code === 200))) return err.message;
+  const scopes = await facebook.tokenScopes(facebook.facebookConfig(env), token).catch(() => null);
+  if (scopes && !scopes.includes("read_insights")) {
+    return `token của Page chưa có quyền read_insights: ở tab Tài khoản bấm Kết nối Facebook, chọn lại đủ các Page và bật quyền xem thống kê (Facebook: ${err.message})`;
   }
-  if (err instanceof PublishFailure) return err.message;
-  throw err;
+  const known = scopes ? "Token đã có quyền read_insights, nên thường do " : "Thường do ";
+  return `Facebook từ chối xem thống kê: ${err.message}. ${known}Page dưới 100 lượt thích, hoặc tài khoản của bạn không có quyền phân tích (xem thông tin chi tiết) trên Page này`;
 }
 
 const totals = (daily: facebook.DailySeries) =>
   Object.fromEntries(facebook.PAGE_METRICS.map((m) => [m, (daily[m] ?? []).reduce((sum, d) => sum + d.value, 0)])) as Record<facebook.PageMetric, number>;
 
-async function pageStats(env: WorkerEnv, page: PageRow, since: number, until: number) {
+async function pageStats(env: WorkerEnv, page: PageRow, token: string, since: number, until: number) {
   const cfg = facebook.facebookConfig(env);
-  const token = await decryptToken(page.accessTokenEnc!, env.TOKEN_ENC_KEY);
   const [followers, daily] = await Promise.all([facebook.pageFollowers(cfg, page.externalId, token), facebook.pageInsights(cfg, page.externalId, token, since, until)]);
-  return { followers, daily, totals: totals(daily), token };
+  return { followers, daily, totals: totals(daily) };
 }
 
 const connectedPages = (env: WorkerEnv) =>
@@ -57,11 +62,12 @@ insightRoutes.get("/", async (c) => {
   const pages = withDistinctNames(await connectedPages(c.env));
   const rows = await Promise.all(
     pages.map(async (p) => {
+      const token = await decryptToken(p.accessTokenEnc!, c.env.TOKEN_ENC_KEY);
       try {
-        const { followers, totals: sums } = await pageStats(c.env, p, since, until);
+        const { followers, totals: sums } = await pageStats(c.env, p, token, since, until);
         return { id: p.id, name: p.name, followers, totals: sums, error: null };
       } catch (err) {
-        return { id: p.id, name: p.name, followers: null, totals: null, error: explain(err) };
+        return { id: p.id, name: p.name, followers: null, totals: null, error: await explain(c.env, token, err) };
       }
     }),
   );
@@ -73,11 +79,12 @@ insightRoutes.get("/:id", async (c) => {
   const { since, until } = range(c);
   const page = (await connectedPages(c.env)).find((p) => p.id === idParam(c));
   if (!page) throw fail(404, "không có Page Facebook đang bật này");
+  const token = await decryptToken(page.accessTokenEnc!, c.env.TOKEN_ENC_KEY);
   try {
-    const stats = await pageStats(c.env, page, since, until);
-    const posts = await facebook.topPosts(facebook.facebookConfig(c.env), page.externalId, stats.token, since, until);
+    const stats = await pageStats(c.env, page, token, since, until);
+    const posts = await facebook.topPosts(facebook.facebookConfig(c.env), page.externalId, token, since, until);
     return c.json({ since, until, followers: stats.followers, daily: stats.daily, totals: stats.totals, posts });
   } catch (err) {
-    throw fail(400, explain(err));
+    throw fail(400, await explain(c.env, token, err));
   }
 });
